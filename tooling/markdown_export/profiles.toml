@@ -26,6 +26,29 @@ source_markers = true
 strict_links = false
 max_chars = 0
 
+[profiles.language]
+title = "Instantánea vigente del lenguaje MUD"
+include = [
+    "especificacion/**/*.md",
+    "notas/01-vision-y-alcance.md",
+    "notas/02-modelo-del-lenguaje.md",
+    "notas/03-semantica-de-ejecucion.md",
+    "notas/10-registro-de-decisiones.md",
+    "notas/decisiones/*.md",
+    "notas/12-destruccion-colecciones-y-grafo-activo.md",
+    "notas/08-preguntas-abiertas.md",
+]
+exclude = [
+    "notas/decisiones/ADR-051-grafo-semantico-e-ir-reconstruibles.md",
+    "notas/decisiones/ADR-052-pipeline-materializadores-y-conformidad.md",
+    "notas/decisiones/ADR-053-operador-semantico-y-flujo-de-autoria.md",
+]
+follow_links = false
+strip_frontmatter = true
+source_markers = true
+strict_links = false
+max_chars = 0
+
 [profiles.current]
 title = "Contexto vigente de MUD"
 include = ["**/*.md"]
