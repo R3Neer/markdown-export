@@ -1,0 +1,40 @@
+[export]
+root = "../.."
+output_dir = "exports"
+default_profile = "current"
+exclude = []
+
+[profiles.specification]
+title = "Especificación formal de MUD"
+include = ["especificacion/**/*.md"]
+follow_links = false
+strip_frontmatter = true
+source_markers = true
+strict_links = false
+max_chars = 0
+
+[profiles.decisions]
+title = "Decisiones y preguntas abiertas de MUD"
+include = [
+    "notas/10-registro-de-decisiones.md",
+    "notas/08-preguntas-abiertas.md",
+    "notas/decisiones/*.md",
+]
+follow_links = false
+strip_frontmatter = true
+source_markers = true
+strict_links = false
+max_chars = 0
+
+[profiles.current]
+title = "Contexto vigente de MUD"
+include = ["**/*.md"]
+exclude = [
+    "referencias/retiradas/**",
+    "aprendizaje/historico/**",
+]
+follow_links = false
+strip_frontmatter = true
+source_markers = true
+strict_links = false
+max_chars = 0
