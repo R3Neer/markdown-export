@@ -20,7 +20,6 @@ max_chars = 0
 [profiles.decisions]
 title = "Decisiones e historial de preguntas"
 include = [
-    "notas/10-registro-de-decisiones.md",
     "notas/preguntas/*.md",
     "notas/decisiones/*.md",
 ]
@@ -37,7 +36,6 @@ include = [
     "notas/01-vision-y-alcance.md",
     "notas/02-modelo-del-lenguaje.md",
     "notas/03-semantica-de-ejecucion.md",
-    "notas/10-registro-de-decisiones.md",
     "notas/decisiones/*.md",
     "notas/12-destruccion-colecciones-y-grafo-activo.md",
     "notas/preguntas/*.md",

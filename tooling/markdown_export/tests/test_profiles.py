@@ -31,7 +31,7 @@ class BundledProfileTests(unittest.TestCase):
                 "notas/preguntas/README.md",
                 "notas/preguntas/Q-001-gramatica-y-saltos-de-linea.md",
                 "notas/preguntas/Q-002-modelo-exacto-de-efectos-secuenciales-y-simultaneos.md",
-                "notas/10-registro-de-decisiones.md",
+                "notas/decisiones/README.md",
                 "notas/12-destruccion-colecciones-y-grafo-activo.md",
                 "notas/decisiones/ADR-054-lenguaje.md",
                 "notas/decisiones/ADR-055-nueva-decision.md",
@@ -93,7 +93,7 @@ class BundledProfileTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             documents = {
-                "notas/10-registro-de-decisiones.md",
+                "notas/decisiones/README.md",
                 "notas/decisiones/ADR-062-lenguaje.md",
                 "notas/preguntas/README.md",
                 "notas/preguntas/Q-001-gramatica-y-saltos-de-linea.md",
