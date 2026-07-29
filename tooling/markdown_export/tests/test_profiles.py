@@ -35,7 +35,7 @@ class BundledProfileTests(unittest.TestCase):
                 "notas/decisiones/ADR-051-grafo-semantico-e-ir-reconstruibles.md",
                 "notas/decisiones/ADR-052-pipeline-materializadores-y-conformidad.md",
                 "notas/decisiones/ADR-053-operador-semantico-y-flujo-de-autoria.md",
-                "notas/07-plan-de-formalizacion.md",
+                "notas/09-riesgos-y-restricciones.md",
                 "tooling/README.md",
             }
             for relative in documents:
@@ -81,7 +81,7 @@ class BundledProfileTests(unittest.TestCase):
             "notas/decisiones/ADR-053-operador-semantico-y-flujo-de-autoria.md",
             selected,
         )
-        self.assertNotIn("notas/07-plan-de-formalizacion.md", selected)
+        self.assertNotIn("notas/09-riesgos-y-restricciones.md", selected)
         self.assertNotIn("tooling/README.md", selected)
 
     def test_decisions_profile_preserves_the_complete_question_history(self) -> None:
