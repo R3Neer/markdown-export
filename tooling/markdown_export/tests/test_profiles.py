@@ -26,13 +26,10 @@ class BundledProfileTests(unittest.TestCase):
                 "especificacion/gramatica/mud.ebnf",
                 "especificacion/asdl/acciones.asdl",
                 "notas/01-vision-y-alcance.md",
-                "notas/02-modelo-del-lenguaje.md",
-                "notas/03-semantica-de-ejecucion.md",
                 "notas/preguntas/README.md",
                 "notas/preguntas/Q-001-gramatica-y-saltos-de-linea.md",
                 "notas/preguntas/Q-002-modelo-exacto-de-efectos-secuenciales-y-simultaneos.md",
                 "notas/decisiones/README.md",
-                "notas/12-destruccion-colecciones-y-grafo-activo.md",
                 "notas/decisiones/ADR-054-lenguaje.md",
                 "notas/decisiones/ADR-055-nueva-decision.md",
                 "notas/decisiones/ADR-051-grafo-semantico-e-ir-reconstruibles.md",
@@ -61,6 +58,7 @@ class BundledProfileTests(unittest.TestCase):
         self.assertIn("especificacion/05-texto-fuente.md", selected)
         self.assertIn("especificacion/gramatica/mud.ebnf", selected)
         self.assertIn("especificacion/asdl/acciones.asdl", selected)
+        self.assertIn("notas/01-vision-y-alcance.md", selected)
         self.assertIn("notas/decisiones/ADR-055-nueva-decision.md", selected)
         self.assertIn("notas/preguntas/README.md", selected)
         self.assertIn(

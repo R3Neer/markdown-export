@@ -34,10 +34,7 @@ title = "Semántica vigente del lenguaje"
 include = [
     "especificacion",
     "notas/01-vision-y-alcance.md",
-    "notas/02-modelo-del-lenguaje.md",
-    "notas/03-semantica-de-ejecucion.md",
     "notas/decisiones/*.md",
-    "notas/12-destruccion-colecciones-y-grafo-activo.md",
     "notas/preguntas/*.md",
 ]
 exclude = [
