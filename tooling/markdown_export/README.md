@@ -13,6 +13,7 @@ python -m tooling.markdown_export list-profiles
 python -m tooling.markdown_export export --profile decisions
 python -m tooling.markdown_export export --files ruta1.md carpeta --name mud-context
 python -m tooling.markdown_export export --profile specification --follow-links
+python -m tooling.markdown_export export --files especificacion README.md --zip-tree
 python -m tooling.markdown_export serve
 ```
 
@@ -27,10 +28,17 @@ Opciones comunes de exportación:
 - `--strip-frontmatter` o `--keep-frontmatter`.
 - `--source-markers` o `--no-source-markers`.
 - `--strict-links`: aborta ante enlaces ambiguos, inexistentes o adjuntos.
-- `--max-chars`: divide entre documentos, nunca dentro de uno.
+- `--max-chars`: divide entre documentos, nunca dentro de uno. Una sola parte
+  produce `nombre.md`; varias partes se empaquetan como `nombre.zip`.
+- `--zip-tree`: produce siempre un ZIP con cada fuente en un archivo separado y
+  conserva su ruta relativa desde la raíz. Las dependencias descubiertas con
+  `--follow-links` también se incluyen. En este modo se puede retirar el
+  frontmatter, pero no se añaden cabeceras, marcadores ni se reescriben enlaces.
 - `--timestamp`: añade una fecha; sin ella, el resultado es reproducible para el mismo contenido, configuración y commit.
 
 `serve` acepta `--port` y `--no-browser`. El servidor escucha exclusivamente en `127.0.0.1`; no debe exponerse como servicio de red.
+
+La integración local de Obsidian utiliza además `--port 0 --ready-json`: el sistema elige un puerto libre y emite un mensaje JSON que el plugin valida mediante `/api/health`. Véase `tooling/obsidian/markdown-export/README.md`.
 
 ## Perfiles incluidos
 
@@ -80,7 +88,7 @@ La resolución prueba, por este orden, la ruta desde la raíz, la ruta relativa 
 
 ## Interfaz web
 
-La interfaz muestra todos los Markdown admitidos, permite buscar y seleccionar parcialmente, cargar un perfil, previsualizar dependencias, partes, caracteres y advertencias, y finalmente exportar. Cada POST requiere un token de sesión. Los nombres de archivos se insertan en la página mediante `textContent` o nodos de texto.
+La interfaz muestra todos los Markdown admitidos, permite buscar y seleccionar parcialmente, cargar un perfil, previsualizar dependencias, partes, caracteres y advertencias, y finalmente exportar. La opción **ZIP con archivos separados (conservar carpetas)** genera una instantánea navegable de los documentos en vez de combinarlos. Cada POST requiere un token de sesión. Los nombres de archivos se insertan en la página mediante `textContent` o nodos de texto.
 
 ## Limitaciones de la primera versión
 

@@ -1,0 +1,24 @@
+{
+  "name": "mud-markdown-export",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc --noEmit && node esbuild.config.mjs production",
+    "test": "vitest run",
+    "lint": "eslint src tests",
+    "check": "npm run lint && npm test && npm run build",
+    "install-local": "npm run build && node scripts/install-local.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.2",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.8.0",
+    "obsidian": "^1.13.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10"
+  }
+}

@@ -31,6 +31,11 @@ def _export_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--strict-links", action="store_true", default=None)
     parser.add_argument("--max-chars", type=int)
     parser.add_argument("--timestamp", action="store_true")
+    parser.add_argument(
+        "--zip-tree",
+        action="store_true",
+        help="Crea un ZIP con cada fuente en su ruta relativa original.",
+    )
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -50,6 +55,11 @@ def make_parser() -> argparse.ArgumentParser:
     _common_arguments(serve)
     serve.add_argument("--port", type=int, default=8765)
     serve.add_argument("--no-browser", action="store_true")
+    serve.add_argument(
+        "--ready-json",
+        action="store_true",
+        help="Emite un único mensaje JSON de disponibilidad para integraciones.",
+    )
     return parser
 
 
@@ -77,6 +87,7 @@ def _run_export(args: argparse.Namespace) -> int:
         strict_links=args.strict_links,
         max_chars=args.max_chars,
         timestamp=args.timestamp,
+        zip_tree=args.zip_tree,
     )
     result = build_export(options)
     targets = write_export(options, result)
@@ -105,7 +116,12 @@ def main(argv: list[str] | None = None) -> int:
             from .web import serve
 
             config = _configuration(args)
-            serve(config, port=args.port, open_browser=not args.no_browser)
+            serve(
+                config,
+                port=args.port,
+                open_browser=not args.no_browser,
+                ready_json=args.ready_json,
+            )
             return 0
     except (ExportError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)

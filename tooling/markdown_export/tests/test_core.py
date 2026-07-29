@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import zipfile
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -169,6 +171,46 @@ class SelectionAndDependencyTests(VaultCase):
 
 
 class OutputTests(VaultCase):
+    def test_zip_tree_preserves_relative_paths_and_separate_content(self) -> None:
+        self.write("guide/start.md", "---\nprivate: true\n---\n# Inicio\n[[chapter/next]]\n")
+        self.write("guide/chapter/next.md", "# Siguiente\n")
+        options = self.options(
+            "guide/start.md",
+            follow_links=True,
+            strip_frontmatter=True,
+            zip_tree=True,
+        )
+        result = build_export(options)
+        self.assertEqual(
+            [part.filename for part in result.parts],
+            ["guide/start.md", "guide/chapter/next.md"],
+        )
+        self.assertEqual(result.parts[0].content, "# Inicio\n[[chapter/next]]\n")
+        self.assertNotIn("Fuente:", result.parts[0].content)
+        target = write_export(options, result)[0]
+        self.assertEqual(target, self.output / "test.zip")
+        with zipfile.ZipFile(target) as archive:
+            self.assertEqual(
+                archive.namelist(),
+                ["guide/start.md", "guide/chapter/next.md"],
+            )
+            self.assertEqual(
+                archive.read("guide/start.md").decode("utf-8"),
+                "# Inicio\n[[chapter/next]]\n",
+            )
+
+    def test_size_partition_uses_document_boundaries(self) -> None:
+        diagnostics = core._Diagnostics()
+        groups = core._group_sections(
+            [("ten.md", "x" * 10), ("five.md", "y" * 5)],
+            12,
+            diagnostics,
+        )
+        self.assertEqual(
+            [[relative for relative, _content in group] for group in groups],
+            [["ten.md"], ["five.md"]],
+        )
+
     def test_size_split_never_cuts_documents(self) -> None:
         self.write("a.md", "# A\n" + "a" * 80)
         self.write("b.md", "# B\n" + "b" * 80)
@@ -211,25 +253,46 @@ class OutputTests(VaultCase):
         self.assertFalse(target.exists())
         self.assertEqual(list(self.output.glob("*.tmp")), [])
 
-    def test_multipart_publish_rolls_back_parts_after_later_error(self) -> None:
+    def test_multipart_is_a_deterministic_zip_and_cleans_superseded_outputs(self) -> None:
+        self.write("a.md", "# A\n" + "a" * 80)
+        self.write("b.md", "# B\n" + "b" * 80)
+        options = replace(
+            self.options("a.md", "b.md", max_chars=100),
+            name="test.v1",
+        )
+        result = build_export(options)
+        self.output.mkdir()
+        (self.output / "test.v1.md").write_text("antiguo", encoding="utf-8")
+        (self.output / "test.v1.part-003.md").write_text("resto", encoding="utf-8")
+        target = write_export(options, result)[0]
+        self.assertEqual(target, self.output / "test.v1.zip")
+        self.assertFalse((self.output / "test.v1.md").exists())
+        self.assertEqual(list(self.output.glob("test.v1.part-*.md")), [])
+        first_bytes = target.read_bytes()
+        with zipfile.ZipFile(target) as archive:
+            self.assertEqual(archive.namelist(), [part.filename for part in result.parts])
+            self.assertEqual(
+                archive.read(result.parts[0].filename).decode("utf-8"),
+                result.parts[0].content,
+            )
+        write_export(options, result)
+        self.assertEqual(target.read_bytes(), first_bytes)
+
+        single_options = replace(self.options("a.md"), name="test.v1")
+        single = build_export(single_options)
+        single_target = write_export(single_options, single)[0]
+        self.assertEqual(single_target, self.output / "test.v1.md")
+        self.assertFalse(target.exists())
+
+    def test_failed_zip_publish_leaves_no_partial_output(self) -> None:
         self.write("a.md", "# A\n" + "a" * 80)
         self.write("b.md", "# B\n" + "b" * 80)
         options = self.options("a.md", "b.md", max_chars=100)
         result = build_export(options)
-        real_replace = core.os.replace
-        calls = 0
-
-        def fail_second(source, target):
-            nonlocal calls
-            calls += 1
-            if calls == 2:
-                raise OSError("segunda parte")
-            return real_replace(source, target)
-
-        with mock.patch("tooling.markdown_export.core.os.replace", side_effect=fail_second):
-            with self.assertRaisesRegex(OSError, "segunda parte"):
+        with mock.patch("tooling.markdown_export.core.os.replace", side_effect=OSError("fallo zip")):
+            with self.assertRaisesRegex(OSError, "fallo zip"):
                 write_export(options, result)
-        self.assertEqual(list(self.output.glob("test.part-*.md")), [])
+        self.assertFalse((self.output / "test.zip").exists())
         self.assertEqual(list(self.output.glob("*.tmp")), [])
 
 

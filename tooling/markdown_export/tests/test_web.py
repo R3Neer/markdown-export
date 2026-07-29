@@ -9,7 +9,7 @@ import urllib.request
 from pathlib import Path
 
 from tooling.markdown_export.core import ProjectConfig, Profile
-from tooling.markdown_export.web import create_server
+from tooling.markdown_export.web import PROTOCOL_VERSION, _ready_payload, create_server
 
 
 class WebTests(unittest.TestCase):
@@ -62,9 +62,19 @@ class WebTests(unittest.TestCase):
             "source_markers": True,
             "strict_links": False,
             "max_chars": 0,
+            "zip_tree": False,
         }
 
     def test_tree_preview_and_export(self) -> None:
+        status, health = self.request("/api/health")
+        self.assertEqual(status, 200)
+        self.assertEqual(health["status"], "ok")
+        self.assertEqual(health["protocol_version"], PROTOCOL_VERSION)
+        self.assertEqual(Path(health["root"]), self.root)
+        ready = _ready_payload(self.config, self.server)
+        self.assertEqual(ready["event"], "ready")
+        self.assertEqual(ready["protocol_version"], PROTOCOL_VERSION)
+        self.assertEqual(ready["url"], self.base + "/")
         status, tree = self.request("/api/tree")
         self.assertEqual(status, 200)
         self.assertEqual(tree["files"], ["a.md", "b.md"])
@@ -75,6 +85,17 @@ class WebTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue((self.root / "exports" / "web-test.md").exists())
         self.assertEqual(len(exported["outputs"]), 1)
+
+        zip_payload = self.payload()
+        zip_payload["zip_tree"] = True
+        status, archived = self.request(
+            "/api/export",
+            payload=zip_payload,
+            token=self.token,
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue((self.root / "exports" / "web-test.zip").exists())
+        self.assertEqual(len(archived["outputs"]), 1)
 
     def test_invalid_token_and_traversal_are_rejected(self) -> None:
         with self.assertRaises(urllib.error.HTTPError) as token_error:

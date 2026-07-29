@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import fnmatch
 import hashlib
+import io
 import os
 import re
 import shutil
 import subprocess
 import tempfile
 import tomllib
+import zipfile
 from collections import defaultdict, deque
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -78,6 +80,7 @@ class ExportOptions:
     strict_links: bool = False
     max_chars: int = 0
     timestamp: bool = False
+    zip_tree: bool = False
     output: Path | None = None
     source_languages: tuple[tuple[str, str], ...] = ()
 
@@ -253,6 +256,7 @@ def options_from_profile(
     strict_links: bool | None = None,
     max_chars: int | None = None,
     timestamp: bool = False,
+    zip_tree: bool = False,
 ) -> ExportOptions:
     if profile_name:
         try:
@@ -276,6 +280,7 @@ def options_from_profile(
         strict_links=profile.strict_links if strict_links is None else strict_links,
         max_chars=profile.max_chars if max_chars is None else max_chars,
         timestamp=timestamp,
+        zip_tree=zip_tree,
         output=output.resolve() if output is not None else None,
         source_languages=config.source_languages,
     )
@@ -834,19 +839,29 @@ def build_export(options: ExportOptions) -> ExportResult:
         messages = "; ".join(item.message for item in diagnostics.items if item.code in {"unresolved-link", "asset-not-supported"})
         raise ExportError(f"El modo estricto rechazó el export: {messages}")
 
-    groups = _group_sections(sections, options.max_chars, diagnostics)
-    appendix = _appendices(omitted, diagnostics)
-    commit = _git_commit(options.root)
-    parts: list[ExportPart] = []
-    total = len(groups)
-    for index_number, group in enumerate(groups, start=1):
-        suffix = "" if total == 1 else f".part-{index_number:03d}"
-        filename = f"{options.name}{suffix}.md"
-        header = _header(options, commit, len(documents), None if total == 1 else (index_number, total))
-        content = header + "\n".join(section for _relative_name, section in group)
-        if index_number == total and appendix:
-            content = content.rstrip() + "\n\n" + appendix
-        parts.append(ExportPart(filename, content.rstrip() + "\n", tuple(relative for relative, _section in group)))
+    if options.zip_tree:
+        parts = [
+            ExportPart(
+                document.relative,
+                document.body if document.body.endswith("\n") else document.body + "\n",
+                (document.relative,),
+            )
+            for document in documents
+        ]
+    else:
+        groups = _group_sections(sections, options.max_chars, diagnostics)
+        appendix = _appendices(omitted, diagnostics)
+        commit = _git_commit(options.root)
+        parts = []
+        total = len(groups)
+        for index_number, group in enumerate(groups, start=1):
+            suffix = "" if total == 1 else f".part-{index_number:03d}"
+            filename = f"{options.name}{suffix}.md"
+            header = _header(options, commit, len(documents), None if total == 1 else (index_number, total))
+            content = header + "\n".join(section for _relative_name, section in group)
+            if index_number == total and appendix:
+                content = content.rstrip() + "\n\n" + appendix
+            parts.append(ExportPart(filename, content.rstrip() + "\n", tuple(relative for relative, _section in group)))
 
     explicit_set = set(explicit)
     return ExportResult(
@@ -860,12 +875,10 @@ def build_export(options: ExportOptions) -> ExportResult:
     )
 
 
-def _stage_write(path: Path, content: str) -> Path:
+def _stage_write(path: Path, content: str | bytes) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     handle = tempfile.NamedTemporaryFile(
-        mode="w",
-        encoding="utf-8",
-        newline="\n",
+        mode="wb",
         dir=path.parent,
         prefix=f".{path.name}.",
         suffix=".tmp",
@@ -874,7 +887,8 @@ def _stage_write(path: Path, content: str) -> Path:
     temporary = Path(handle.name)
     try:
         with handle:
-            handle.write(content)
+            payload = content.encode("utf-8") if isinstance(content, str) else content
+            handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
         return temporary
@@ -883,7 +897,7 @@ def _stage_write(path: Path, content: str) -> Path:
         raise
 
 
-def _atomic_write_many(items: list[tuple[Path, str]]) -> None:
+def _atomic_write_many(items: list[tuple[Path, str | bytes]]) -> None:
     staged: list[tuple[Path, Path]] = []
     backups: dict[Path, Path] = {}
     committed: list[Path] = []
@@ -922,21 +936,51 @@ def _atomic_write(path: Path, content: str) -> None:
     _atomic_write_many([(path, content)])
 
 
+def _zip_export(result: ExportResult) -> bytes:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(
+        buffer,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+        compresslevel=9,
+    ) as archive:
+        for part in result.parts:
+            info = zipfile.ZipInfo(part.filename, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3
+            info.external_attr = 0o100644 << 16
+            archive.writestr(
+                info,
+                part.content.encode("utf-8"),
+                compress_type=zipfile.ZIP_DEFLATED,
+                compresslevel=9,
+            )
+    return buffer.getvalue()
+
+
+def _remove_superseded_outputs(target: Path, *, zipped: bool) -> None:
+    stem_name = target.name[: -len(target.suffix)] if target.suffix else target.name
+    stem = target.parent / stem_name
+    alternative = stem.parent / f"{stem.name}{'.md' if zipped else '.zip'}"
+    alternative.unlink(missing_ok=True)
+    for legacy_part in stem.parent.glob(f"{stem.name}.part-*.md"):
+        if legacy_part.is_file():
+            legacy_part.unlink()
+
+
 def write_export(options: ExportOptions, result: ExportResult) -> tuple[Path, ...]:
     base_output = options.output
+    zipped = options.zip_tree or len(result.parts) > 1
     if base_output is not None:
         _ensure_within(base_output, options.root, "La salida queda fuera de la raíz del proyecto.")
-        if len(result.parts) == 1:
-            targets = [base_output]
-        else:
-            stem = base_output.with_suffix("")
-            targets = [
-                stem.parent / f"{stem.name}.part-{index:03d}.md"
-                for index in range(1, len(result.parts) + 1)
-            ]
+        target = base_output.with_suffix(".zip") if zipped else base_output
     else:
-        targets = [options.output_dir / part.filename for part in result.parts]
-    _atomic_write_many(
-        [(target, part.content) for target, part in zip(targets, result.parts, strict=True)]
-    )
-    return tuple(targets)
+        target = (
+            options.output_dir / f"{result.name}.zip"
+            if zipped
+            else options.output_dir / result.parts[0].filename
+        )
+    content: str | bytes = _zip_export(result) if zipped else result.parts[0].content
+    _atomic_write_many([(target, content)])
+    _remove_superseded_outputs(target, zipped=zipped)
+    return (target,)

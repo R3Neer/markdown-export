@@ -18,6 +18,8 @@ from .core import (
     write_export,
 )
 
+PROTOCOL_VERSION = 1
+
 
 HTML = """<!doctype html>
 <html lang="es">
@@ -52,6 +54,7 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #8886; p
 <label><input id="strip" type="checkbox" checked> Retirar frontmatter</label>
 <label><input id="markers" type="checkbox" checked> Marcadores de procedencia</label>
 <label><input id="strict" type="checkbox"> Enlaces estrictos</label>
+<label><input id="zipTree" type="checkbox"> ZIP con archivos separados (conservar carpetas)</label>
 <label>Límite de caracteres (0 = sin límite) <input id="maxChars" type="number" min="0" value="0"></label>
 <p><button id="preview">Previsualizar</button><button id="export">Exportar</button></p>
 <pre id="result">Cargando…</pre>
@@ -140,7 +143,7 @@ function payload() {
     profile: byId("profile").value, files, name: byId("name").value,
     follow_links: byId("follow").checked, strip_frontmatter: byId("strip").checked,
     source_markers: byId("markers").checked, strict_links: byId("strict").checked,
-    max_chars: Number(byId("maxChars").value || 0)
+    zip_tree: byId("zipTree").checked, max_chars: Number(byId("maxChars").value || 0)
   };
 }
 async function run(action) {
@@ -255,6 +258,16 @@ def create_server(
                 self.end_headers()
                 self.wfile.write(content)
                 return
+            if self.path == "/api/health":
+                self._json(
+                    HTTPStatus.OK,
+                    {
+                        "status": "ok",
+                        "protocol_version": PROTOCOL_VERSION,
+                        "root": str(config.root),
+                    },
+                )
+                return
             if self.path in {"/api/tree", "/api/profiles"}:
                 self._json(HTTPStatus.OK, _tree_payload(config))
                 return
@@ -290,6 +303,7 @@ def create_server(
                     source_markers=bool(payload.get("source_markers", True)),
                     strict_links=bool(payload.get("strict_links", False)),
                     max_chars=int(payload.get("max_chars", 0)),
+                    zip_tree=bool(payload.get("zip_tree", False)),
                 )
                 result = build_export(options)
                 response = _result_payload(result)
@@ -303,11 +317,30 @@ def create_server(
     return server, session_token
 
 
-def serve(config: ProjectConfig, *, port: int = 8765, open_browser: bool = True) -> None:
+def _ready_payload(config: ProjectConfig, server: ThreadingHTTPServer) -> dict[str, Any]:
+    return {
+        "event": "ready",
+        "url": f"http://127.0.0.1:{server.server_port}/",
+        "protocol_version": PROTOCOL_VERSION,
+        "root": str(config.root),
+    }
+
+
+def serve(
+    config: ProjectConfig,
+    *,
+    port: int = 8765,
+    open_browser: bool = True,
+    ready_json: bool = False,
+) -> None:
     server, _token = create_server(config, port=port)
-    url = f"http://127.0.0.1:{server.server_port}/"
-    print(f"Exportador disponible en {url}")
-    print("Pulsa Ctrl+C para detenerlo.")
+    payload = _ready_payload(config, server)
+    url = str(payload["url"])
+    if ready_json:
+        print(json.dumps(payload, ensure_ascii=False), flush=True)
+    else:
+        print(f"Exportador disponible en {url}", flush=True)
+        print("Pulsa Ctrl+C para detenerlo.", flush=True)
     if open_browser:
         threading.Timer(0.2, webbrowser.open, args=(url,)).start()
     try:
