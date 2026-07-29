@@ -38,6 +38,8 @@ fieldset { margin: 1rem 0; } label { display: block; margin: .45rem 0; }
 .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
 .profile-actions { display: flex; gap: .5rem; align-items: end; }
 .profile-actions label { flex: 1; }
+.search-actions { display: flex; gap: .5rem; align-items: end; }
+.search-actions label { flex: 1; }
 #savePanel { border: 1px solid #8886; padding: .7rem; margin: .6rem 0 1rem; }
 #tree { max-height: 25rem; overflow: auto; border: 1px solid #8886; padding: .7rem; }
 #tree label { overflow-wrap: anywhere; }
@@ -61,7 +63,10 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #8886; p
   <button id="saveProfile" type="button">Guardar</button>
   <button id="cancelSaveProfile" type="button">Cancelar</button>
 </div>
+<div class="search-actions">
 <label>Buscar <input id="search" type="text"></label>
+<button id="refreshFiles" type="button">Actualizar archivos</button>
+</div>
 <fieldset><legend>Documentos</legend><div id="tree"></div></fieldset>
 </section>
 <section>
@@ -232,6 +237,31 @@ async function saveCurrentProfile() {
     setText(byId("result"), "Perfil personal guardado.");
   } catch (error) { setText(byId("result"), "Error: " + error.message); }
 }
+async function refreshFiles() {
+  setText(byId("result"), "Actualizando archivos…");
+  const selectedBefore = new Set(state.selected);
+  const profileBefore = byId("profile").value;
+  try {
+    const data = await api("/api/refresh", {
+      method: "POST", body: "{}"
+    });
+    state.files = data.files;
+    state.profiles = data.profiles;
+    if (profileBefore && state.profiles[profileBefore]) {
+      state.activeProfile = profileBefore;
+      renderProfileOptions(profileBefore);
+      applyProfile();
+    } else {
+      state.selected = new Set(
+        state.files.filter(path => selectedBefore.has(path))
+      );
+      renderProfileOptions("");
+      renderFiles();
+      updateProfileState();
+    }
+    setText(byId("result"), "Archivos actualizados.");
+  } catch (error) { setText(byId("result"), "Error: " + error.message); }
+}
 async function run(action) {
   setText(byId("result"), "Procesando…");
   try {
@@ -262,6 +292,7 @@ for (const id of ["name", "follow", "strip", "markers", "strict", "zipTree", "ma
   byId(id).addEventListener("change", updateProfileState);
 }
 byId("showSaveProfile").addEventListener("click", showSaveProfile);
+byId("refreshFiles").addEventListener("click", refreshFiles);
 byId("saveProfile").addEventListener("click", saveCurrentProfile);
 byId("cancelSaveProfile").addEventListener("click", () => {
   byId("savePanel").hidden = true;
@@ -274,22 +305,29 @@ start().catch(error => setText(byId("result"), "Error: " + error.message));
 </html>"""
 
 
-def _profile_files(config: ProjectConfig, name: str) -> list[str]:
+def _profile_files(
+    config: ProjectConfig,
+    name: str,
+    index: VaultIndex,
+) -> list[str]:
     options = options_from_profile(config, name)
-    index = VaultIndex(config.root, options.excludes, config.source_languages)
     try:
-        return [path.relative_to(config.root).as_posix() for path in select_paths(options, index)]
+        return [index.relative(path) for path in select_paths(options, index)]
     except ExportError:
         return []
 
 
-def _tree_payload(config: ProjectConfig) -> dict[str, Any]:
-    index = VaultIndex(config.root, config.excludes, config.source_languages)
+def _tree_payload(
+    config: ProjectConfig,
+    index: VaultIndex | None = None,
+) -> dict[str, Any]:
+    if index is None:
+        index = VaultIndex(config.root, config.excludes, config.source_languages)
     profiles = {
         name: {
             "name": name,
             "title": profile.title,
-            "files": _profile_files(config, name),
+            "files": _profile_files(config, name, index),
             "follow_links": profile.follow_links,
             "strip_frontmatter": profile.strip_frontmatter,
             "source_markers": profile.source_markers,
@@ -301,7 +339,7 @@ def _tree_payload(config: ProjectConfig) -> dict[str, Any]:
         for name, profile in config.profiles.items()
     }
     return {
-        "files": [path.relative_to(config.root).as_posix() for path in index.files],
+        "files": [index.relative(path) for path in index.files],
         "profiles": profiles,
         "default_profile": config.default_profile,
     }
@@ -327,6 +365,19 @@ def create_server(
     token: str | None = None,
 ) -> tuple[ThreadingHTTPServer, str]:
     session_token = token or secrets.token_urlsafe(32)
+    index_lock = threading.Lock()
+    cached_index: VaultIndex | None = None
+
+    def get_index(*, refresh: bool = False) -> VaultIndex:
+        nonlocal cached_index
+        with index_lock:
+            if cached_index is None or refresh:
+                cached_index = VaultIndex(
+                    config.root,
+                    config.excludes,
+                    config.source_languages,
+                )
+            return cached_index
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: object) -> None:
@@ -360,7 +411,7 @@ def create_server(
                 )
                 return
             if self.path in {"/api/tree", "/api/profiles"}:
-                self._json(HTTPStatus.OK, _tree_payload(config))
+                self._json(HTTPStatus.OK, _tree_payload(config, get_index()))
                 return
             self._json(HTTPStatus.NOT_FOUND, {"error": "Recurso inexistente."})
 
@@ -368,7 +419,12 @@ def create_server(
             if self.headers.get("X-Export-Token") != session_token:
                 self._json(HTTPStatus.FORBIDDEN, {"error": "Token de sesión inválido."})
                 return
-            if self.path not in {"/api/preview", "/api/export", "/api/profiles/save"}:
+            if self.path not in {
+                "/api/preview",
+                "/api/export",
+                "/api/profiles/save",
+                "/api/refresh",
+            }:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Recurso inexistente."})
                 return
             try:
@@ -378,6 +434,12 @@ def create_server(
                 payload = json.loads(self.rfile.read(length))
                 if not isinstance(payload, dict):
                     raise ExportError("La petición debe ser un objeto JSON.")
+                if self.path == "/api/refresh":
+                    self._json(
+                        HTTPStatus.OK,
+                        _tree_payload(config, get_index(refresh=True)),
+                    )
+                    return
                 files = payload.get("files")
                 if not isinstance(files, list) or not all(isinstance(item, str) for item in files):
                     raise ExportError("`files` debe ser una lista de rutas.")
@@ -406,11 +468,7 @@ def create_server(
                     )
                     select_paths(
                         validation_options,
-                        VaultIndex(
-                            config.root,
-                            validation_options.excludes,
-                            config.source_languages,
-                        ),
+                        get_index(),
                     )
                     base_excludes = (
                         config.profiles[profile].exclude
@@ -432,7 +490,7 @@ def create_server(
                             zip_tree=bool(payload.get("zip_tree", False)),
                         ),
                     )
-                    response = _tree_payload(config)
+                    response = _tree_payload(config, get_index())
                     response["saved_profile"] = profile_name
                     self._json(HTTPStatus.OK, response)
                     return
@@ -448,7 +506,7 @@ def create_server(
                     max_chars=int(payload.get("max_chars", 0)),
                     zip_tree=bool(payload.get("zip_tree", False)),
                 )
-                result = build_export(options)
+                result = build_export(options, get_index())
                 response = _result_payload(result)
                 if self.path == "/api/export":
                     response["outputs"] = [str(path) for path in write_export(options, result)]

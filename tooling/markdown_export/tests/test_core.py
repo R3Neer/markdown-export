@@ -12,7 +12,9 @@ from tooling.markdown_export.core import (
     ALWAYS_EXCLUDED,
     ExportError,
     ExportOptions,
+    VaultIndex,
     build_export,
+    select_paths,
     strip_frontmatter,
     write_export,
 )
@@ -130,6 +132,35 @@ class MarkdownTransformationTests(VaultCase):
 
 
 class SelectionAndDependencyTests(VaultCase):
+    def test_directory_and_glob_selection_reuse_the_catalog(self) -> None:
+        self.write("docs/root.md", "# Root\n")
+        self.write("docs/nested/child.md", "# Child\n")
+        index = VaultIndex(self.root, ALWAYS_EXCLUDED)
+        with mock.patch.object(
+            Path,
+            "rglob",
+            side_effect=AssertionError("select_paths no debe recorrer el disco"),
+        ):
+            directory = select_paths(self.options("docs"), index)
+            globbed = select_paths(self.options("**/*.md"), index)
+        expected = [
+            self.root / "docs" / "nested" / "child.md",
+            self.root / "docs" / "root.md",
+        ]
+        self.assertEqual(directory, expected)
+        self.assertEqual(globbed, expected)
+
+    def test_build_export_accepts_a_shared_catalog(self) -> None:
+        self.write("a.md", "# A\n")
+        options = self.options("a.md")
+        index = VaultIndex(self.root, ALWAYS_EXCLUDED)
+        with mock.patch(
+            "tooling.markdown_export.core.VaultIndex",
+            side_effect=AssertionError("build_export no debe reconstruir el índice"),
+        ):
+            result = build_export(options, index)
+        self.assertEqual(result.explicit_documents, ("a.md",))
+
     def test_recursive_following_handles_cycles_once_in_discovery_order(self) -> None:
         self.write("a.md", "# A\n[[c]] [[b]]\n")
         self.write("b.md", "# B\n[[a]]\n")

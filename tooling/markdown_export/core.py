@@ -14,7 +14,7 @@ import zipfile
 from collections import defaultdict, deque
 from dataclasses import dataclass, field, replace
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Iterable, Iterator
 from urllib.parse import unquote
 
@@ -77,6 +77,7 @@ class ExportOptions:
     title: str
     includes: tuple[str, ...]
     excludes: tuple[str, ...]
+    index_excludes: tuple[str, ...] = ALWAYS_EXCLUDED
     follow_links: bool = False
     strip_frontmatter: bool = True
     source_markers: bool = True
@@ -347,6 +348,7 @@ def options_from_profile(
         title=title or profile.title,
         includes=selected,
         excludes=tuple(dict.fromkeys(config.excludes + profile.exclude)),
+        index_excludes=config.excludes,
         follow_links=profile.follow_links if follow_links is None else follow_links,
         strip_frontmatter=profile.strip_frontmatter if strip_frontmatter is None else strip_frontmatter,
         source_markers=profile.source_markers if source_markers is None else source_markers,
@@ -397,6 +399,31 @@ def _is_exportable_source(
     return path.suffix.casefold() == ".md" or path.suffix.casefold() in dict(source_languages)
 
 
+def _is_excluded_directory(relative: str, patterns: Iterable[str]) -> bool:
+    return _is_excluded(relative, patterns) or _is_excluded(
+        f"{relative.rstrip('/')}/__descendant__",
+        patterns,
+    )
+
+
+def _glob_variants(pattern: str) -> tuple[str, ...]:
+    variants = {pattern}
+    pending = [pattern]
+    while pending:
+        current = pending.pop()
+        start = 0
+        while True:
+            position = current.find("**/", start)
+            if position < 0:
+                break
+            variant = current[:position] + current[position + 3 :]
+            if variant not in variants:
+                variants.add(variant)
+                pending.append(variant)
+            start = position + 1
+    return tuple(variants)
+
+
 class VaultIndex:
     def __init__(
         self,
@@ -410,25 +437,90 @@ class VaultIndex:
         self.files: list[Path] = []
         self.by_relative: dict[str, Path] = {}
         self.by_stem: dict[str, list[Path]] = defaultdict(list)
+        self.relative_by_path: dict[Path, str] = {}
+        candidates: list[Path] = []
+        for directory, child_directories, filenames in os.walk(
+            self.root,
+            topdown=True,
+            followlinks=False,
+        ):
+            directory_path = Path(directory)
+            relative_directory = directory_path.relative_to(self.root).as_posix()
+            child_directories[:] = sorted(
+                (
+                    name
+                    for name in child_directories
+                    if not _is_excluded_directory(
+                        (
+                            f"{relative_directory}/{name}"
+                            if relative_directory != "."
+                            else name
+                        ),
+                        excludes,
+                    )
+                ),
+                key=str.casefold,
+            )
+            for filename in filenames:
+                candidate = directory_path / filename
+                if _is_exportable_source(candidate, source_languages):
+                    candidates.append(candidate)
+
         for path in sorted(
-            (
-                candidate
-                for candidate in self.root.rglob("*")
-                if candidate.is_file() and _is_exportable_source(candidate, source_languages)
-            ),
+            candidates,
             key=lambda item: item.relative_to(self.root).as_posix().casefold(),
         ):
             _ensure_within(path, self.root, f"Una fuente indexada queda fuera de la raíz: {path}")
-            relative = _relative(path, self.root)
+            relative = path.relative_to(self.root).as_posix()
             if _is_excluded(relative, excludes):
                 continue
             resolved = path.resolve()
             self.files.append(resolved)
+            self.relative_by_path[resolved] = relative
             self.by_relative[relative.casefold()] = resolved
             no_suffix = Path(relative).with_suffix("").as_posix().casefold()
             if path.suffix.casefold() == ".md" or no_suffix not in self.by_relative:
                 self.by_relative[no_suffix] = resolved
             self.by_stem[path.stem.casefold()].append(resolved)
+
+    def relative(self, path: Path) -> str:
+        known = self.relative_by_path.get(path)
+        if known is not None:
+            return known
+        resolved = path.resolve()
+        try:
+            return self.relative_by_path[resolved]
+        except KeyError:
+            return _relative(resolved, self.root)
+
+    def matches(self, entry: str) -> list[Path]:
+        normalized = entry.replace("\\", "/").strip().strip("/")
+        if normalized in {"", "."}:
+            return list(self.files)
+
+        candidate = self.root / normalized
+        if candidate.is_dir():
+            prefix = normalized.casefold().rstrip("/") + "/"
+            return [
+                path
+                for path in self.files
+                if self.relative_by_path[path].casefold().startswith(prefix)
+            ]
+        if candidate.is_file():
+            resolved = candidate.resolve()
+            return [resolved] if resolved in self.relative_by_path else []
+
+        exact = self.by_relative.get(normalized.casefold())
+        if exact is not None and not any(character in normalized for character in "*?["):
+            return [exact]
+        return [
+            path
+            for path in self.files
+            if any(
+                PurePosixPath(self.relative_by_path[path]).match(pattern)
+                for pattern in _glob_variants(normalized)
+            )
+        ]
 
     def supports_target(self, target: str) -> bool:
         suffix = Path(unquote(target)).suffix.casefold()
@@ -466,6 +558,8 @@ class VaultIndex:
 
 
 def select_paths(options: ExportOptions, index: VaultIndex) -> list[Path]:
+    if index.root != options.root.resolve():
+        raise ExportError("El índice no pertenece a la raíz de la exportación.")
     selected: list[Path] = []
     seen: set[Path] = set()
     for entry in options.includes:
@@ -473,38 +567,13 @@ def select_paths(options: ExportOptions, index: VaultIndex) -> list[Path]:
         if not entry:
             continue
         _reject_unsafe_selection(entry)
-        matches: list[Path] = []
-        candidate = (options.root / entry).resolve()
-        if candidate.exists():
-            _ensure_within(candidate, options.root, f"La selección queda fuera de la raíz: {entry}")
-            if candidate.is_file():
-                matches = [candidate]
-            elif candidate.is_dir():
-                matches = sorted(
-                    (
-                        path
-                        for path in candidate.rglob("*")
-                        if path.is_file()
-                        and _is_exportable_source(path, options.source_languages)
-                    ),
-                    key=lambda item: item.relative_to(options.root).as_posix().casefold(),
-                )
-        else:
-            matches = sorted(
-                options.root.glob(entry),
-                key=lambda item: item.relative_to(options.root).as_posix().casefold(),
-            )
-        for path in matches:
-            if not path.is_file() or not _is_exportable_source(path, options.source_languages):
-                continue
-            _ensure_within(path, options.root, f"La selección queda fuera de la raíz: {entry}")
-            relative = _relative(path, options.root)
+        for path in index.matches(entry):
+            relative = index.relative(path)
             if _is_excluded(relative, options.excludes):
                 continue
-            resolved = path.resolve()
-            if resolved not in seen:
-                seen.add(resolved)
-                selected.append(resolved)
+            if path not in seen:
+                seen.add(path)
+                selected.append(path)
     if not selected:
         raise ExportError("La selección no contiene fuentes exportables.")
     return selected
@@ -875,7 +944,10 @@ def _group_sections(
     return groups
 
 
-def build_export(options: ExportOptions) -> ExportResult:
+def build_export(
+    options: ExportOptions,
+    index: VaultIndex | None = None,
+) -> ExportResult:
     options = replace(options, root=options.root.resolve(), output_dir=options.output_dir.resolve())
     _ensure_within(options.output_dir, options.root, "El directorio de salida queda fuera de la raíz.")
     if options.max_chars < 0:
@@ -885,7 +957,17 @@ def build_export(options: ExportOptions) -> ExportResult:
     # pero no deben volverlo «inexistente»: aún puede aparecer como referencia
     # omitida. Solo los directorios internos que nunca son contenido se apartan
     # del índice de resolución.
-    index = VaultIndex(options.root, ALWAYS_EXCLUDED, options.source_languages)
+    if index is None:
+        index = VaultIndex(
+            options.root,
+            options.index_excludes,
+            options.source_languages,
+        )
+    elif (
+        index.root != options.root
+        or index.source_languages != options.source_languages
+    ):
+        raise ExportError("El índice no es compatible con esta exportación.")
     explicit = select_paths(options, index)
     diagnostics = _Diagnostics()
     ordered = _expand_dependencies(explicit, index, options, diagnostics)
