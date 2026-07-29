@@ -182,7 +182,7 @@ start().catch(error => setText(byId("result"), "Error: " + error.message));
 
 def _profile_files(config: ProjectConfig, name: str) -> list[str]:
     options = options_from_profile(config, name)
-    index = VaultIndex(config.root, options.excludes)
+    index = VaultIndex(config.root, options.excludes, config.source_languages)
     from .core import select_paths
 
     try:
@@ -192,7 +192,7 @@ def _profile_files(config: ProjectConfig, name: str) -> list[str]:
 
 
 def _tree_payload(config: ProjectConfig) -> dict[str, Any]:
-    index = VaultIndex(config.root, config.excludes)
+    index = VaultIndex(config.root, config.excludes, config.source_languages)
     profiles = {
         name: {
             "name": name,

@@ -2,6 +2,7 @@
 root = "../.."
 output_dir = "exports"
 default_profile = "current"
+source_languages = { ebnf = "ebnf", adsl = "adsl" }
 exclude = [
     "exports/**",
     "**/node_modules/**",
@@ -9,7 +10,7 @@ exclude = [
 
 [profiles.specification]
 title = "Especificación formal de MUD"
-include = ["especificacion/**/*.md"]
+include = ["especificacion"]
 follow_links = false
 strip_frontmatter = true
 source_markers = true
@@ -32,7 +33,7 @@ max_chars = 0
 [profiles.language]
 title = "Instantánea vigente del lenguaje MUD"
 include = [
-    "especificacion/**/*.md",
+    "especificacion",
     "notas/01-vision-y-alcance.md",
     "notas/02-modelo-del-lenguaje.md",
     "notas/03-semantica-de-ejecucion.md",
@@ -70,7 +71,7 @@ max_chars = 0
 
 [profiles.current]
 title = "Contexto vigente de MUD"
-include = ["**/*.md"]
+include = ["."]
 exclude = [
     "referencias/retiradas/**",
     "aprendizaje/historico/**",

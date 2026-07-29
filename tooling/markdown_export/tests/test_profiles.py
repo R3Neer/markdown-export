@@ -23,6 +23,8 @@ class BundledProfileTests(unittest.TestCase):
             documents = {
                 "especificacion/README.md",
                 "especificacion/05-texto-fuente.md",
+                "especificacion/gramatica/mud.ebnf",
+                "especificacion/adsl/acciones.adsl",
                 "notas/01-vision-y-alcance.md",
                 "notas/02-modelo-del-lenguaje.md",
                 "notas/03-semantica-de-ejecucion.md",
@@ -50,13 +52,15 @@ class BundledProfileTests(unittest.TestCase):
                 output_dir=root / "exports",
             )
             options = options_from_profile(config, "language")
-            index = VaultIndex(root, options.excludes)
+            index = VaultIndex(root, options.excludes, options.source_languages)
             selected = {
                 path.relative_to(root).as_posix()
                 for path in select_paths(options, index)
             }
 
         self.assertIn("especificacion/05-texto-fuente.md", selected)
+        self.assertIn("especificacion/gramatica/mud.ebnf", selected)
+        self.assertIn("especificacion/adsl/acciones.adsl", selected)
         self.assertIn("notas/decisiones/ADR-055-nueva-decision.md", selected)
         self.assertIn("notas/preguntas/README.md", selected)
         self.assertIn(
@@ -103,7 +107,7 @@ class BundledProfileTests(unittest.TestCase):
 
             config = replace(bundled, root=root, output_dir=root / "exports")
             options = options_from_profile(config, "decisions")
-            index = VaultIndex(root, options.excludes)
+            index = VaultIndex(root, options.excludes, options.source_languages)
             selected = {
                 path.relative_to(root).as_posix()
                 for path in select_paths(options, index)
@@ -140,7 +144,7 @@ class BundledProfileTests(unittest.TestCase):
 
             config = replace(bundled, root=root, output_dir=root / "exports")
             options = options_from_profile(config, "current")
-            index = VaultIndex(root, options.excludes)
+            index = VaultIndex(root, options.excludes, options.source_languages)
             selected = {
                 path.relative_to(root).as_posix()
                 for path in select_paths(options, index)

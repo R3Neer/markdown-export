@@ -61,6 +61,7 @@ class ProjectConfig:
     excludes: tuple[str, ...]
     default_profile: str
     profiles: dict[str, Profile]
+    source_languages: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,7 @@ class ExportOptions:
     max_chars: int = 0
     timestamp: bool = False
     output: Path | None = None
+    source_languages: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -112,6 +114,7 @@ class _Document:
     document_anchor: str
     heading_anchors: dict[str, str]
     heading_occurrences: list[tuple[str, str]]
+    language: str | None = None
 
 
 @dataclass
@@ -142,6 +145,30 @@ def _as_tuple(value: object, field_name: str) -> tuple[str, ...]:
     return tuple(value)
 
 
+def _source_languages(value: object) -> tuple[tuple[str, str], ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, dict) or not all(
+        isinstance(extension, str) and isinstance(language, str)
+        for extension, language in value.items()
+    ):
+        raise ExportError("`export.source_languages` debe ser una tabla de cadenas.")
+    normalized: dict[str, str] = {}
+    for extension, language in value.items():
+        suffix = f".{extension.lstrip('.')}".casefold()
+        fence_language = language.strip()
+        if suffix == ".md":
+            raise ExportError("Markdown no puede redefinirse en `export.source_languages`.")
+        if not re.fullmatch(r"\.[a-z0-9][a-z0-9_-]*", suffix):
+            raise ExportError(f"Extensión inválida en `export.source_languages`: {extension}")
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+-]*", fence_language):
+            raise ExportError(f"Lenguaje de bloque inválido en `export.source_languages`: {language}")
+        if suffix in normalized:
+            raise ExportError(f"Extensión duplicada en `export.source_languages`: {suffix}")
+        normalized[suffix] = fence_language
+    return tuple(sorted(normalized.items()))
+
+
 def load_config(config_path: Path, root_override: Path | None = None) -> ProjectConfig:
     config_path = config_path.resolve()
     try:
@@ -164,7 +191,7 @@ def load_config(config_path: Path, root_override: Path | None = None) -> Project
         else (config_path.parent / configured_root).resolve()
     )
     if not root.is_dir():
-        raise ExportError(f"La raíz Markdown no existe o no es una carpeta: {root}")
+        raise ExportError(f"La raíz de fuentes no existe o no es una carpeta: {root}")
 
     output_value = export_data.get("output_dir", "exports")
     if not isinstance(output_value, str):
@@ -173,6 +200,7 @@ def load_config(config_path: Path, root_override: Path | None = None) -> Project
     _ensure_within(output_dir, root, "El directorio de salida queda fuera de la raíz.")
 
     excludes = tuple(dict.fromkeys(ALWAYS_EXCLUDED + _as_tuple(export_data.get("exclude"), "export.exclude")))
+    source_languages = _source_languages(export_data.get("source_languages"))
     default_profile = export_data.get("default_profile", "")
     if not isinstance(default_profile, str):
         raise ExportError("`export.default_profile` debe ser una cadena.")
@@ -200,7 +228,15 @@ def load_config(config_path: Path, root_override: Path | None = None) -> Project
         )
     if default_profile and default_profile not in profiles:
         raise ExportError(f"El perfil predeterminado `{default_profile}` no existe.")
-    return ProjectConfig(config_path, root, output_dir, excludes, default_profile, profiles)
+    return ProjectConfig(
+        config_path,
+        root,
+        output_dir,
+        excludes,
+        default_profile,
+        profiles,
+        source_languages,
+    )
 
 
 def options_from_profile(
@@ -241,6 +277,7 @@ def options_from_profile(
         max_chars=profile.max_chars if max_chars is None else max_chars,
         timestamp=timestamp,
         output=output.resolve() if output is not None else None,
+        source_languages=config.source_languages,
     )
 
 
@@ -275,32 +312,54 @@ def _is_excluded(relative: str, patterns: Iterable[str]) -> bool:
     return False
 
 
+def _is_exportable_source(
+    path: Path,
+    source_languages: tuple[tuple[str, str], ...],
+) -> bool:
+    return path.suffix.casefold() == ".md" or path.suffix.casefold() in dict(source_languages)
+
+
 class VaultIndex:
-    def __init__(self, root: Path, excludes: tuple[str, ...]):
+    def __init__(
+        self,
+        root: Path,
+        excludes: tuple[str, ...],
+        source_languages: tuple[tuple[str, str], ...] = (),
+    ):
         self.root = root.resolve()
         self.excludes = excludes
+        self.source_languages = source_languages
         self.files: list[Path] = []
         self.by_relative: dict[str, Path] = {}
         self.by_stem: dict[str, list[Path]] = defaultdict(list)
         for path in sorted(
-            self.root.rglob("*.md"),
+            (
+                candidate
+                for candidate in self.root.rglob("*")
+                if candidate.is_file() and _is_exportable_source(candidate, source_languages)
+            ),
             key=lambda item: item.relative_to(self.root).as_posix().casefold(),
         ):
-            _ensure_within(path, self.root, f"Un Markdown indexado queda fuera de la raíz: {path}")
+            _ensure_within(path, self.root, f"Una fuente indexada queda fuera de la raíz: {path}")
             relative = _relative(path, self.root)
             if _is_excluded(relative, excludes):
                 continue
-            self.files.append(path.resolve())
+            resolved = path.resolve()
+            self.files.append(resolved)
+            self.by_relative[relative.casefold()] = resolved
             no_suffix = Path(relative).with_suffix("").as_posix().casefold()
-            self.by_relative[no_suffix] = path.resolve()
-            self.by_stem[path.stem.casefold()].append(path.resolve())
+            if path.suffix.casefold() == ".md" or no_suffix not in self.by_relative:
+                self.by_relative[no_suffix] = resolved
+            self.by_stem[path.stem.casefold()].append(resolved)
+
+    def supports_target(self, target: str) -> bool:
+        suffix = Path(unquote(target)).suffix.casefold()
+        return suffix in {"", ".md"} or suffix in dict(self.source_languages)
 
     def resolve(self, target: str, source: Path) -> tuple[Path | None, str | None]:
         target = unquote(target.strip().replace("\\", "/"))
         if not target:
             return source.resolve(), None
-        if target.lower().endswith(".md"):
-            target = target[:-3]
         target = target.strip("/")
         exact = self.by_relative.get(target.casefold())
         if exact is not None:
@@ -313,7 +372,12 @@ class VaultIndex:
         if exact is not None:
             return exact, None
 
-        basename = Path(target).name.casefold()
+        target_path = Path(target)
+        basename = (
+            target_path.stem.casefold()
+            if target_path.suffix
+            else target_path.name.casefold()
+        )
         candidates = self.by_stem.get(basename, [])
         if len(candidates) == 1:
             return candidates[0], None
@@ -339,7 +403,12 @@ def select_paths(options: ExportOptions, index: VaultIndex) -> list[Path]:
                 matches = [candidate]
             elif candidate.is_dir():
                 matches = sorted(
-                    candidate.rglob("*.md"),
+                    (
+                        path
+                        for path in candidate.rglob("*")
+                        if path.is_file()
+                        and _is_exportable_source(path, options.source_languages)
+                    ),
                     key=lambda item: item.relative_to(options.root).as_posix().casefold(),
                 )
         else:
@@ -348,7 +417,7 @@ def select_paths(options: ExportOptions, index: VaultIndex) -> list[Path]:
                 key=lambda item: item.relative_to(options.root).as_posix().casefold(),
             )
         for path in matches:
-            if not path.is_file() or path.suffix.lower() != ".md":
+            if not path.is_file() or not _is_exportable_source(path, options.source_languages):
                 continue
             _ensure_within(path, options.root, f"La selección queda fuera de la raíz: {entry}")
             relative = _relative(path, options.root)
@@ -359,7 +428,7 @@ def select_paths(options: ExportOptions, index: VaultIndex) -> list[Path]:
                 seen.add(resolved)
                 selected.append(resolved)
     if not selected:
-        raise ExportError("La selección no contiene archivos Markdown exportables.")
+        raise ExportError("La selección no contiene fuentes exportables.")
     return selected
 
 
@@ -418,16 +487,22 @@ def _document_anchor(relative: str) -> str:
     return f"mud-doc-{_slug(relative)}-{digest}"
 
 
-def _load_document(path: Path, root: Path, remove_frontmatter: bool) -> _Document:
+def _load_document(
+    path: Path,
+    root: Path,
+    remove_frontmatter: bool,
+    source_languages: tuple[tuple[str, str], ...],
+) -> _Document:
     raw = path.read_text(encoding="utf-8-sig")
     raw = raw.replace("\r\n", "\n").replace("\r", "\n")
-    body = strip_frontmatter(raw) if remove_frontmatter else raw
-    title = path.stem
+    language = dict(source_languages).get(path.suffix.casefold())
+    body = strip_frontmatter(raw) if remove_frontmatter and language is None else raw
+    title = path.name if language is not None else path.stem
     headings: list[tuple[str, str]] = []
     counts: dict[str, int] = defaultdict(int)
     relative = _relative(path, root)
     doc_anchor = _document_anchor(relative)
-    for line, fenced in _fenced_lines(body):
+    for line, fenced in _fenced_lines(body if language is None else ""):
         if fenced:
             continue
         match = HEADING_RE.match(line)
@@ -443,7 +518,17 @@ def _load_document(path: Path, root: Path, remove_frontmatter: bool) -> _Documen
     heading_map: dict[str, str] = {}
     for key, anchor in headings:
         heading_map.setdefault(key, anchor)
-    return _Document(path, relative, raw, body, title, doc_anchor, heading_map, headings)
+    return _Document(
+        path,
+        relative,
+        raw,
+        body,
+        title,
+        doc_anchor,
+        heading_map,
+        headings,
+        language,
+    )
 
 
 def _split_wikilink(value: str) -> tuple[str, str | None, str]:
@@ -453,7 +538,10 @@ def _split_wikilink(value: str) -> tuple[str, str | None, str]:
     return target.strip(), heading.strip() if heading_separator else None, display.strip() or target.strip()
 
 
-def _iter_local_references(text: str) -> Iterator[tuple[str, str | None, str, bool]]:
+def _iter_local_references(
+    text: str,
+    index: VaultIndex,
+) -> Iterator[tuple[str, str | None, str, bool]]:
     for line, fenced in _fenced_lines(text):
         if fenced:
             continue
@@ -469,7 +557,7 @@ def _iter_local_references(text: str) -> Iterator[tuple[str, str | None, str, bo
             if raw_target.startswith("#"):
                 continue
             target, separator, heading = raw_target.partition("#")
-            if Path(unquote(target)).suffix.lower() not in {"", ".md"}:
+            if not index.supports_target(target):
                 yield target, heading if separator else None, match.group(2) or Path(target).name, True
                 continue
             yield target, heading if separator else None, match.group(2) or Path(target).stem, bool(match.group(1))
@@ -488,10 +576,12 @@ def _expand_dependencies(
     queue = deque(explicit)
     while queue:
         source = queue.popleft()
+        if source.suffix.casefold() != ".md":
+            continue
         text = source.read_text(encoding="utf-8-sig")
         if options.strip_frontmatter:
             text = strip_frontmatter(text)
-        for target, _heading, _label, embedded in _iter_local_references(text):
+        for target, _heading, _label, embedded in _iter_local_references(text, index):
             if embedded:
                 diagnostics.add("warning", "asset-not-supported", f"Embed o adjunto no exportado: `{target}`", _relative(source, options.root), target)
                 continue
@@ -535,8 +625,8 @@ def _rewrite_line(
             heading = raw_target[1:]
             return f"[{label}](#{_target_anchor(source, heading)})"
         target, separator, heading = raw_target.partition("#")
-        is_markdown = Path(unquote(target)).suffix.lower() in {"", ".md"}
-        if embedded or not is_markdown:
+        is_document = index.supports_target(target)
+        if embedded or not is_document:
             diagnostics.add("warning", "asset-not-supported", f"Adjunto no exportado: `{target}`", source.relative, target)
             return label or Path(target).name
         resolved, error = index.resolve(target, source.path)
@@ -585,6 +675,21 @@ def _render_document(
     output = [f'<a id="{document.document_anchor}"></a>', f"## {rendered_title}", ""]
     if options.source_markers:
         output.extend([f"> Fuente: `{document.relative}`", ""])
+
+    if document.language is not None:
+        longest_run = max(
+            (len(match.group(0)) for match in re.finditer(r"`+", document.body)),
+            default=0,
+        )
+        fence = "`" * max(3, longest_run + 1)
+        output.extend(
+            [
+                f"{fence}{document.language}",
+                document.body.rstrip("\n"),
+                fence,
+            ]
+        )
+        return "\n".join(output).strip() + "\n"
 
     fence_marker: str | None = None
     first_h1_removed = False
@@ -702,11 +807,19 @@ def build_export(options: ExportOptions) -> ExportResult:
     # pero no deben volverlo «inexistente»: aún puede aparecer como referencia
     # omitida. Solo los directorios internos que nunca son contenido se apartan
     # del índice de resolución.
-    index = VaultIndex(options.root, ALWAYS_EXCLUDED)
+    index = VaultIndex(options.root, ALWAYS_EXCLUDED, options.source_languages)
     explicit = select_paths(options, index)
     diagnostics = _Diagnostics()
     ordered = _expand_dependencies(explicit, index, options, diagnostics)
-    documents = [_load_document(path, options.root, options.strip_frontmatter) for path in ordered]
+    documents = [
+        _load_document(
+            path,
+            options.root,
+            options.strip_frontmatter,
+            options.source_languages,
+        )
+        for path in ordered
+    ]
     included = {document.path.resolve(): document for document in documents}
     omitted: dict[tuple[str, str], None] = {}
     sections = [
