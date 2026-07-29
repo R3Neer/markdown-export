@@ -89,7 +89,7 @@ La resolución prueba, por este orden, la ruta desde la raíz, la ruta relativa 
 
 ## Interfaz web
 
-La interfaz muestra todos los Markdown admitidos, permite buscar y seleccionar parcialmente, cargar un perfil, previsualizar dependencias, partes, caracteres y advertencias, y finalmente exportar. El servidor construye un único catálogo podando directorios excluidos antes de recorrerlos; perfiles, previsualización y exportación reutilizan ese catálogo. **Actualizar archivos** lo reconstruye cuando se han creado, renombrado o eliminado fuentes mientras la pestaña estaba abierta. Las modificaciones de contenido se leen siempre en el momento de exportar.
+La interfaz muestra todos los Markdown admitidos, permite buscar y seleccionar parcialmente, cargar un perfil, previsualizar dependencias, partes, caracteres y advertencias, y finalmente exportar. Cada apertura o reapertura mediante el plugin reconstruye un único catálogo, podando directorios excluidos antes de recorrerlos; perfiles, previsualización y exportación reutilizan después ese catálogo. **Actualizar archivos** lo reconstruye cuando se han creado, renombrado o eliminado fuentes mientras la pestaña estaba abierta. Las modificaciones de contenido se leen siempre en el momento de exportar.
 
 Si se modifica la selección o cualquier opción, el selector pasa a **Personalizado (sin guardar)**. **Guardar como perfil…** conserva esa configuración en `profiles.local.toml`, que Git ignora. La opción **ZIP con archivos separados (conservar carpetas)** genera una instantánea navegable de los documentos en vez de combinarlos. Cada POST requiere un token de sesión. Los nombres de archivos se insertan en la página mediante `textContent` o nodos de texto.
 

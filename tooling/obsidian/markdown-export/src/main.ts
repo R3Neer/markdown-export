@@ -70,6 +70,15 @@ class MarkdownExportView extends ItemView {
     this.renderError(message);
   }
 
+  refreshFromDisk(): void {
+    const url = this.plugin.server.url;
+    if (this.holdsServer && url !== null) {
+      this.renderFrame(url);
+      return;
+    }
+    void this.loadExporter();
+  }
+
   private async loadExporter(): Promise<void> {
     this.renderStatus("Iniciando el exportador…");
     try {
@@ -373,6 +382,9 @@ export default class MarkdownExportPlugin extends Plugin {
     });
     if (existing !== undefined) {
       await this.app.workspace.revealLeaf(existing);
+      if (existing.view instanceof MarkdownExportView) {
+        existing.view.refreshFromDisk();
+      }
       return;
     }
 

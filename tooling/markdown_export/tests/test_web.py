@@ -152,15 +152,16 @@ include = ["a.md"]
         self.assertTrue(personal.zip_tree)
         self.assertIn("mi-contexto", reloaded.personal_profile_names)
 
-    def test_file_catalog_is_cached_until_explicit_refresh(self) -> None:
+    def test_tree_reload_is_fresh_and_explicit_refresh_updates_open_page(self) -> None:
         status, initial = self.request("/api/tree")
         self.assertEqual(status, 200)
         self.assertNotIn("new.md", initial["files"])
         (self.root / "new.md").write_text("# Nuevo\n", encoding="utf-8")
 
-        status, cached = self.request("/api/tree")
+        status, reloaded = self.request("/api/tree")
         self.assertEqual(status, 200)
-        self.assertNotIn("new.md", cached["files"])
+        self.assertIn("new.md", reloaded["files"])
+        (self.root / "later.md").write_text("# Posterior\n", encoding="utf-8")
 
         status, refreshed = self.request(
             "/api/refresh",
@@ -168,7 +169,7 @@ include = ["a.md"]
             token=self.token,
         )
         self.assertEqual(status, 200)
-        self.assertIn("new.md", refreshed["files"])
+        self.assertIn("later.md", refreshed["files"])
 
 
 if __name__ == "__main__":

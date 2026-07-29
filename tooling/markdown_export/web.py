@@ -410,7 +410,13 @@ def create_server(
                     },
                 )
                 return
-            if self.path in {"/api/tree", "/api/profiles"}:
+            if self.path == "/api/tree":
+                self._json(
+                    HTTPStatus.OK,
+                    _tree_payload(config, get_index(refresh=True)),
+                )
+                return
+            if self.path == "/api/profiles":
                 self._json(HTTPStatus.OK, _tree_payload(config, get_index()))
                 return
             self._json(HTTPStatus.NOT_FOUND, {"error": "Recurso inexistente."})
