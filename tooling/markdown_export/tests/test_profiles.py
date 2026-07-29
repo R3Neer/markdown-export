@@ -25,7 +25,7 @@ class BundledProfileTests(unittest.TestCase):
                 "especificacion/05-texto-fuente.md",
                 "especificacion/gramatica/mud.ebnf",
                 "especificacion/asdl/acciones.asdl",
-                "notas/01-vision-y-alcance.md",
+                "notas/vision-y-alcance.md",
                 "notas/preguntas/README.md",
                 "notas/preguntas/Q-001-gramatica-y-saltos-de-linea.md",
                 "notas/preguntas/Q-002-modelo-exacto-de-efectos-secuenciales-y-simultaneos.md",
@@ -35,7 +35,7 @@ class BundledProfileTests(unittest.TestCase):
                 "notas/decisiones/ADR-051-grafo-semantico-e-ir-reconstruibles.md",
                 "notas/decisiones/ADR-052-pipeline-materializadores-y-conformidad.md",
                 "notas/decisiones/ADR-053-operador-semantico-y-flujo-de-autoria.md",
-                "notas/09-riesgos-y-restricciones.md",
+                "notas/riesgos-y-restricciones.md",
                 "tooling/README.md",
             }
             for relative in documents:
@@ -58,7 +58,7 @@ class BundledProfileTests(unittest.TestCase):
         self.assertIn("especificacion/05-texto-fuente.md", selected)
         self.assertIn("especificacion/gramatica/mud.ebnf", selected)
         self.assertIn("especificacion/asdl/acciones.asdl", selected)
-        self.assertIn("notas/01-vision-y-alcance.md", selected)
+        self.assertIn("notas/vision-y-alcance.md", selected)
         self.assertIn("notas/decisiones/ADR-055-nueva-decision.md", selected)
         self.assertIn("notas/preguntas/README.md", selected)
         self.assertIn(
@@ -81,7 +81,7 @@ class BundledProfileTests(unittest.TestCase):
             "notas/decisiones/ADR-053-operador-semantico-y-flujo-de-autoria.md",
             selected,
         )
-        self.assertNotIn("notas/09-riesgos-y-restricciones.md", selected)
+        self.assertNotIn("notas/riesgos-y-restricciones.md", selected)
         self.assertNotIn("tooling/README.md", selected)
 
     def test_decisions_profile_preserves_the_complete_question_history(self) -> None:

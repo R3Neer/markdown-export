@@ -33,7 +33,7 @@ max_chars = 0
 title = "Semántica vigente del lenguaje"
 include = [
     "especificacion",
-    "notas/01-vision-y-alcance.md",
+    "notas/vision-y-alcance.md",
     "notas/decisiones/*.md",
     "notas/preguntas/*.md",
 ]
@@ -68,7 +68,6 @@ max_chars = 0
 title = "Corpus vigente completo"
 include = ["."]
 exclude = [
-    "referencias/retiradas/**",
     "aprendizaje/historico/**",
     "notas/preguntas/Q-001-gramatica-y-saltos-de-linea.md",
     "notas/preguntas/Q-004-rollback-de-rejected.md",
