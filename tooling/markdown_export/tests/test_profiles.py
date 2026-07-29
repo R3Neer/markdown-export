@@ -24,7 +24,7 @@ class BundledProfileTests(unittest.TestCase):
                 "especificacion/README.md",
                 "especificacion/05-texto-fuente.md",
                 "especificacion/gramatica/mud.ebnf",
-                "especificacion/adsl/acciones.adsl",
+                "especificacion/asdl/acciones.asdl",
                 "notas/01-vision-y-alcance.md",
                 "notas/02-modelo-del-lenguaje.md",
                 "notas/03-semantica-de-ejecucion.md",
@@ -60,7 +60,7 @@ class BundledProfileTests(unittest.TestCase):
 
         self.assertIn("especificacion/05-texto-fuente.md", selected)
         self.assertIn("especificacion/gramatica/mud.ebnf", selected)
-        self.assertIn("especificacion/adsl/acciones.adsl", selected)
+        self.assertIn("especificacion/asdl/acciones.asdl", selected)
         self.assertIn("notas/decisiones/ADR-055-nueva-decision.md", selected)
         self.assertIn("notas/preguntas/README.md", selected)
         self.assertIn(

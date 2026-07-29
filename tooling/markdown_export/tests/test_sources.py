@@ -11,7 +11,7 @@ from tooling.markdown_export.core import (
 )
 
 
-SOURCE_LANGUAGES = ((".adsl", "adsl"), (".ebnf", "ebnf"))
+SOURCE_LANGUAGES = ((".asdl", "asdl"), (".ebnf", "ebnf"))
 
 
 class ConfiguredSourceTests(unittest.TestCase):
@@ -58,7 +58,7 @@ class ConfiguredSourceTests(unittest.TestCase):
     def test_directory_selection_includes_all_configured_source_languages(self) -> None:
         self.write("specification/chapter.md", "# Capítulo\n")
         self.write("specification/grammar.ebnf", "rule = value;\n")
-        self.write("specification/actions.adsl", "action Example\n")
+        self.write("specification/actions.asdl", "action Example\n")
         self.write("specification/ignored.txt", "no\n")
 
         result = build_export(self.options("specification"))
@@ -66,12 +66,12 @@ class ConfiguredSourceTests(unittest.TestCase):
         self.assertEqual(
             result.explicit_documents,
             (
-                "specification/actions.adsl",
+                "specification/actions.asdl",
                 "specification/chapter.md",
                 "specification/grammar.ebnf",
             ),
         )
-        self.assertIn("```adsl\naction Example\n```", result.parts[0].content)
+        self.assertIn("```asdl\naction Example\n```", result.parts[0].content)
         self.assertIn("```ebnf\nrule = value;\n```", result.parts[0].content)
         self.assertNotIn("ignored.txt", result.parts[0].content)
 

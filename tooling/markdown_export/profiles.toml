@@ -2,7 +2,7 @@
 root = "../.."
 output_dir = "exports"
 default_profile = "current"
-source_languages = { ebnf = "ebnf", adsl = "adsl" }
+source_languages = { ebnf = "ebnf", asdl = "asdl" }
 exclude = [
     "exports/**",
     "**/node_modules/**",
