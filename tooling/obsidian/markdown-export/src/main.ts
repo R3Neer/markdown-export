@@ -38,7 +38,7 @@ class MarkdownExportView extends ItemView {
   }
 
   override getDisplayText(): string {
-    return "MUD Markdown Export";
+    return "Exportador Markdown";
   }
 
   override getIcon(): string {
@@ -97,7 +97,7 @@ class MarkdownExportView extends ItemView {
     const frame = this.prepareContent().createEl("iframe", {
       cls: "mud-markdown-export-frame",
       attr: {
-        title: "Exportador Markdown portable",
+        title: "Exportador Markdown",
         src: url,
         sandbox: "allow-forms allow-same-origin allow-scripts",
         referrerpolicy: "no-referrer",
@@ -149,7 +149,7 @@ export default class MarkdownExportPlugin extends Plugin {
   override async onload(): Promise<void> {
     const adapter = this.app.vault.adapter;
     if (!(adapter instanceof FileSystemAdapter)) {
-      throw new Error("MUD Markdown Export necesita una bóveda local de escritorio.");
+      throw new Error("Markdown Export necesita una bóveda local de escritorio.");
     }
     this.vaultRoot = adapter.getBasePath();
     this.settings = { ...DEFAULT_SETTINGS, ...(await this.loadData() as Partial<ExportPluginSettings> | null) };

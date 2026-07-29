@@ -11,10 +11,14 @@ from typing import Any
 
 from .core import (
     ExportError,
+    Profile,
     ProjectConfig,
     VaultIndex,
+    _safe_name,
     build_export,
     options_from_profile,
+    save_personal_profile,
+    select_paths,
     write_export,
 )
 
@@ -32,6 +36,9 @@ HTML = """<!doctype html>
 body { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
 fieldset { margin: 1rem 0; } label { display: block; margin: .45rem 0; }
 .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+.profile-actions { display: flex; gap: .5rem; align-items: end; }
+.profile-actions label { flex: 1; }
+#savePanel { border: 1px solid #8886; padding: .7rem; margin: .6rem 0 1rem; }
 #tree { max-height: 25rem; overflow: auto; border: 1px solid #8886; padding: .7rem; }
 #tree label { overflow-wrap: anywhere; }
 input[type=text], input[type=number], select { box-sizing: border-box; width: 100%; padding: .35rem; }
@@ -41,10 +48,19 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #8886; p
 </style>
 </head>
 <body>
-<h1>Exportador Markdown portable</h1>
+<h1>Exportador Markdown</h1>
 <div class="layout">
 <section>
+<div class="profile-actions">
 <label>Perfil <select id="profile"></select></label>
+<button id="showSaveProfile" type="button">Guardar como perfil…</button>
+</div>
+<div id="savePanel" hidden>
+  <label>Nombre del perfil <input id="profileName" type="text"></label>
+  <label>Título visible <input id="profileTitle" type="text"></label>
+  <button id="saveProfile" type="button">Guardar</button>
+  <button id="cancelSaveProfile" type="button">Cancelar</button>
+</div>
 <label>Buscar <input id="search" type="text"></label>
 <fieldset><legend>Documentos</legend><div id="tree"></div></fieldset>
 </section>
@@ -63,7 +79,10 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #8886; p
 <script>
 "use strict";
 const token = __TOKEN__;
-const state = { files: [], profiles: {}, selected: new Set() };
+const state = {
+  files: [], profiles: {}, selected: new Set(),
+  activeProfile: "", applyingProfile: false
+};
 const byId = id => document.getElementById(id);
 async function api(path, options = {}) {
   options.headers = Object.assign({"Content-Type": "application/json"}, options.headers || {});
@@ -103,7 +122,7 @@ function renderFiles() {
       folder.addEventListener("change", event => {
         event.stopPropagation();
         for (const path of descendants) folder.checked ? state.selected.add(path) : state.selected.delete(path);
-        renderFiles();
+        renderFiles(); updateProfileState();
       });
       summary.append(folder, document.createTextNode(" " + name));
       details.append(summary);
@@ -117,7 +136,7 @@ function renderFiles() {
       input.checked = state.selected.has(path);
       input.addEventListener("change", () => {
         input.checked ? state.selected.add(path) : state.selected.delete(path);
-        renderFiles();
+        renderFiles(); updateProfileState();
       });
       label.append(input, document.createTextNode(" " + path.split("/").at(-1)));
       parent.append(label);
@@ -125,17 +144,56 @@ function renderFiles() {
   }
   appendBranch(tree, root);
 }
+function renderProfileOptions(selected = "") {
+  const select = byId("profile");
+  select.replaceChildren();
+  const custom = document.createElement("option");
+  custom.value = ""; setText(custom, "Personalizado (sin guardar)");
+  custom.disabled = true;
+  select.append(custom);
+  for (const profile of Object.values(state.profiles)) {
+    const option = document.createElement("option");
+    option.value = profile.name;
+    setText(option, profile.title + (profile.personal ? " · personal" : ""));
+    select.append(option);
+  }
+  select.value = selected;
+}
+function profileMatches(profile) {
+  if (!profile) return false;
+  const files = state.files.filter(path => state.selected.has(path));
+  return byId("name").value === profile.name
+    && byId("follow").checked === profile.follow_links
+    && byId("strip").checked === profile.strip_frontmatter
+    && byId("markers").checked === profile.source_markers
+    && byId("strict").checked === profile.strict_links
+    && byId("zipTree").checked === profile.zip_tree
+    && Number(byId("maxChars").value || 0) === profile.max_chars
+    && JSON.stringify(files) === JSON.stringify(profile.files);
+}
+function updateProfileState() {
+  if (state.applyingProfile) return;
+  byId("profile").value = profileMatches(state.profiles[state.activeProfile])
+    ? state.activeProfile
+    : "";
+}
 function applyProfile() {
-  const profile = state.profiles[byId("profile").value];
+  const selected = byId("profile").value;
+  const profile = state.profiles[selected];
   if (!profile) return;
+  state.applyingProfile = true;
+  state.activeProfile = selected;
   byId("name").value = profile.name;
   byId("follow").checked = profile.follow_links;
   byId("strip").checked = profile.strip_frontmatter;
   byId("markers").checked = profile.source_markers;
   byId("strict").checked = profile.strict_links;
+  byId("zipTree").checked = profile.zip_tree;
   byId("maxChars").value = profile.max_chars;
   state.selected = new Set(profile.files);
   renderFiles();
+  state.applyingProfile = false;
+  updateProfileState();
 }
 function payload() {
   const files = state.files.filter(path => state.selected.has(path));
@@ -145,6 +203,34 @@ function payload() {
     source_markers: byId("markers").checked, strict_links: byId("strict").checked,
     zip_tree: byId("zipTree").checked, max_chars: Number(byId("maxChars").value || 0)
   };
+}
+function showSaveProfile() {
+  const base = state.profiles[state.activeProfile];
+  byId("profileName").value = byId("name").value || "perfil";
+  byId("profileTitle").value = base
+    ? base.title + " personalizado"
+    : byId("name").value || "Perfil personalizado";
+  byId("savePanel").hidden = false;
+  byId("profileName").focus();
+}
+async function saveCurrentProfile() {
+  setText(byId("result"), "Guardando perfil…");
+  try {
+    const request = Object.assign(payload(), {
+      profile_name: byId("profileName").value,
+      profile_title: byId("profileTitle").value
+    });
+    const data = await api("/api/profiles/save", {
+      method: "POST", body: JSON.stringify(request)
+    });
+    state.profiles = data.profiles;
+    state.activeProfile = data.saved_profile;
+    byId("name").value = data.saved_profile;
+    renderProfileOptions(state.activeProfile);
+    byId("savePanel").hidden = true;
+    updateProfileState();
+    setText(byId("result"), "Perfil personal guardado.");
+  } catch (error) { setText(byId("result"), "Error: " + error.message); }
 }
 async function run(action) {
   setText(byId("result"), "Procesando…");
@@ -165,16 +251,21 @@ async function run(action) {
 async function start() {
   const data = await api("/api/tree");
   state.files = data.files; state.profiles = data.profiles;
-  for (const profile of Object.values(state.profiles)) {
-    const option = document.createElement("option");
-    option.value = profile.name; setText(option, profile.title);
-    byId("profile").append(option);
-  }
-  byId("profile").value = data.default_profile;
-  renderFiles(); applyProfile(); setText(byId("result"), "Listo.");
+  state.activeProfile = data.default_profile;
+  renderProfileOptions(state.activeProfile);
+  applyProfile(); setText(byId("result"), "Listo.");
 }
 byId("search").addEventListener("input", renderFiles);
 byId("profile").addEventListener("change", applyProfile);
+for (const id of ["name", "follow", "strip", "markers", "strict", "zipTree", "maxChars"]) {
+  byId(id).addEventListener("input", updateProfileState);
+  byId(id).addEventListener("change", updateProfileState);
+}
+byId("showSaveProfile").addEventListener("click", showSaveProfile);
+byId("saveProfile").addEventListener("click", saveCurrentProfile);
+byId("cancelSaveProfile").addEventListener("click", () => {
+  byId("savePanel").hidden = true;
+});
 byId("preview").addEventListener("click", () => run("preview"));
 byId("export").addEventListener("click", () => run("export"));
 start().catch(error => setText(byId("result"), "Error: " + error.message));
@@ -186,8 +277,6 @@ start().catch(error => setText(byId("result"), "Error: " + error.message));
 def _profile_files(config: ProjectConfig, name: str) -> list[str]:
     options = options_from_profile(config, name)
     index = VaultIndex(config.root, options.excludes, config.source_languages)
-    from .core import select_paths
-
     try:
         return [path.relative_to(config.root).as_posix() for path in select_paths(options, index)]
     except ExportError:
@@ -206,6 +295,8 @@ def _tree_payload(config: ProjectConfig) -> dict[str, Any]:
             "source_markers": profile.source_markers,
             "strict_links": profile.strict_links,
             "max_chars": profile.max_chars,
+            "zip_tree": profile.zip_tree,
+            "personal": name in config.personal_profile_names,
         }
         for name, profile in config.profiles.items()
     }
@@ -277,7 +368,7 @@ def create_server(
             if self.headers.get("X-Export-Token") != session_token:
                 self._json(HTTPStatus.FORBIDDEN, {"error": "Token de sesión inválido."})
                 return
-            if self.path not in {"/api/preview", "/api/export"}:
+            if self.path not in {"/api/preview", "/api/export", "/api/profiles/save"}:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "Recurso inexistente."})
                 return
             try:
@@ -293,6 +384,58 @@ def create_server(
                 profile = payload.get("profile", "")
                 if not isinstance(profile, str):
                     raise ExportError("`profile` debe ser una cadena.")
+                if self.path == "/api/profiles/save":
+                    profile_name = _safe_name(str(payload.get("profile_name", "")))
+                    profile_title = str(payload.get("profile_title", "")).strip()
+                    if not profile_title:
+                        raise ExportError("El título visible del perfil no puede estar vacío.")
+                    max_chars = int(payload.get("max_chars", 0))
+                    if max_chars < 0:
+                        raise ExportError("`max_chars` no puede ser negativo.")
+                    validation_options = options_from_profile(
+                        config,
+                        profile,
+                        includes=files,
+                        name=profile_name,
+                        follow_links=bool(payload.get("follow_links", False)),
+                        strip_frontmatter=bool(payload.get("strip_frontmatter", True)),
+                        source_markers=bool(payload.get("source_markers", True)),
+                        strict_links=bool(payload.get("strict_links", False)),
+                        max_chars=max_chars,
+                        zip_tree=bool(payload.get("zip_tree", False)),
+                    )
+                    select_paths(
+                        validation_options,
+                        VaultIndex(
+                            config.root,
+                            validation_options.excludes,
+                            config.source_languages,
+                        ),
+                    )
+                    base_excludes = (
+                        config.profiles[profile].exclude
+                        if profile in config.profiles
+                        else ()
+                    )
+                    save_personal_profile(
+                        config,
+                        Profile(
+                            name=profile_name,
+                            title=profile_title,
+                            include=tuple(files),
+                            exclude=base_excludes,
+                            follow_links=bool(payload.get("follow_links", False)),
+                            strip_frontmatter=bool(payload.get("strip_frontmatter", True)),
+                            source_markers=bool(payload.get("source_markers", True)),
+                            strict_links=bool(payload.get("strict_links", False)),
+                            max_chars=max_chars,
+                            zip_tree=bool(payload.get("zip_tree", False)),
+                        ),
+                    )
+                    response = _tree_payload(config)
+                    response["saved_profile"] = profile_name
+                    self._json(HTTPStatus.OK, response)
+                    return
                 options = options_from_profile(
                     config,
                     profile,

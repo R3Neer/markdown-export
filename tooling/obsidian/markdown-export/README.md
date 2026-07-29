@@ -1,4 +1,4 @@
-# MUD Markdown Export
+# Markdown Export
 
 Plugin local de escritorio para abrir el exportador Markdown portable dentro de Obsidian. El icono lateral abre una ventana flotante; la paleta de comandos permite elegir entre ventana flotante y pestaña integrada.
 

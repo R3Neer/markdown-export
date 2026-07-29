@@ -33,7 +33,8 @@ def _export_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--timestamp", action="store_true")
     parser.add_argument(
         "--zip-tree",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=None,
         help="Crea un ZIP con cada fuente en su ruta relativa original.",
     )
 

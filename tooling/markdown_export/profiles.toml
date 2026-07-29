@@ -9,7 +9,7 @@ exclude = [
 ]
 
 [profiles.specification]
-title = "Especificación formal de MUD"
+title = "Especificación formal"
 include = ["especificacion"]
 follow_links = false
 strip_frontmatter = true
@@ -18,7 +18,7 @@ strict_links = false
 max_chars = 0
 
 [profiles.decisions]
-title = "Decisiones e historial de preguntas de MUD"
+title = "Decisiones e historial de preguntas"
 include = [
     "notas/10-registro-de-decisiones.md",
     "notas/preguntas/*.md",
@@ -31,7 +31,7 @@ strict_links = false
 max_chars = 0
 
 [profiles.language]
-title = "Instantánea vigente del lenguaje MUD"
+title = "Semántica vigente del lenguaje"
 include = [
     "especificacion",
     "notas/01-vision-y-alcance.md",
@@ -70,7 +70,7 @@ strict_links = false
 max_chars = 0
 
 [profiles.current]
-title = "Contexto vigente de MUD"
+title = "Corpus vigente completo"
 include = ["."]
 exclude = [
     "referencias/retiradas/**",

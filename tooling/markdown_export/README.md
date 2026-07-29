@@ -42,9 +42,10 @@ La integración local de Obsidian utiliza además `--port 0 --ready-json`: el si
 
 ## Perfiles incluidos
 
-- `specification`: documentos bajo `especificacion/`.
+- `specification`: especificación formal.
 - `decisions`: registro, preguntas abiertas y ADR.
-- `current`: Markdown vigente, salvo referencias retiradas y aprendizaje histórico.
+- `language`: semántica vigente del lenguaje, sin decisiones de arquitectura o producto.
+- `current`: corpus vigente completo, salvo referencias retiradas y aprendizaje histórico.
 
 Los perfiles conservan su orden explícito y no siguen enlaces por defecto. Las dependencias descubiertas con `--follow-links` se añaden una sola vez y en orden determinista.
 
@@ -88,7 +89,7 @@ La resolución prueba, por este orden, la ruta desde la raíz, la ruta relativa 
 
 ## Interfaz web
 
-La interfaz muestra todos los Markdown admitidos, permite buscar y seleccionar parcialmente, cargar un perfil, previsualizar dependencias, partes, caracteres y advertencias, y finalmente exportar. La opción **ZIP con archivos separados (conservar carpetas)** genera una instantánea navegable de los documentos en vez de combinarlos. Cada POST requiere un token de sesión. Los nombres de archivos se insertan en la página mediante `textContent` o nodos de texto.
+La interfaz muestra todos los Markdown admitidos, permite buscar y seleccionar parcialmente, cargar un perfil, previsualizar dependencias, partes, caracteres y advertencias, y finalmente exportar. Si se modifica la selección o cualquier opción, el selector pasa a **Personalizado (sin guardar)**. **Guardar como perfil…** conserva esa configuración en `profiles.local.toml`, que Git ignora. La opción **ZIP con archivos separados (conservar carpetas)** genera una instantánea navegable de los documentos en vez de combinarlos. Cada POST requiere un token de sesión. Los nombres de archivos se insertan en la página mediante `textContent` o nodos de texto.
 
 ## Limitaciones de la primera versión
 

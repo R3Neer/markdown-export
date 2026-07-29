@@ -3,6 +3,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import io
+import json
 import os
 import re
 import shutil
@@ -53,6 +54,7 @@ class Profile:
     source_markers: bool = True
     strict_links: bool = False
     max_chars: int = 0
+    zip_tree: bool = False
 
 
 @dataclass(frozen=True)
@@ -64,6 +66,7 @@ class ProjectConfig:
     default_profile: str
     profiles: dict[str, Profile]
     source_languages: tuple[tuple[str, str], ...] = ()
+    personal_profile_names: set[str] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -172,6 +175,35 @@ def _source_languages(value: object) -> tuple[tuple[str, str], ...]:
     return tuple(sorted(normalized.items()))
 
 
+def _profile_table(data: object, source: str) -> dict[str, Profile]:
+    if not isinstance(data, dict):
+        raise ExportError(f"La sección `[profiles]` de {source} debe contener tablas.")
+    profiles: dict[str, Profile] = {}
+    for name, raw in data.items():
+        if not isinstance(raw, dict):
+            raise ExportError(f"El perfil `{name}` de {source} debe ser una tabla.")
+        title = raw.get("title", name)
+        if not isinstance(title, str):
+            raise ExportError(f"`profiles.{name}.title` de {source} debe ser una cadena.")
+        profiles[name] = Profile(
+            name=name,
+            title=title,
+            include=_as_tuple(raw.get("include"), f"profiles.{name}.include"),
+            exclude=_as_tuple(raw.get("exclude"), f"profiles.{name}.exclude"),
+            follow_links=bool(raw.get("follow_links", False)),
+            strip_frontmatter=bool(raw.get("strip_frontmatter", True)),
+            source_markers=bool(raw.get("source_markers", True)),
+            strict_links=bool(raw.get("strict_links", False)),
+            max_chars=int(raw.get("max_chars", 0)),
+            zip_tree=bool(raw.get("zip_tree", False)),
+        )
+    return profiles
+
+
+def _personal_profiles_path(config_path: Path) -> Path:
+    return config_path.with_name(f"{config_path.stem}.local.toml")
+
+
 def load_config(config_path: Path, root_override: Path | None = None) -> ProjectConfig:
     config_path = config_path.resolve()
     try:
@@ -208,27 +240,20 @@ def load_config(config_path: Path, root_override: Path | None = None) -> Project
     if not isinstance(default_profile, str):
         raise ExportError("`export.default_profile` debe ser una cadena.")
 
-    raw_profiles = data.get("profiles", {})
-    if not isinstance(raw_profiles, dict):
-        raise ExportError("La sección `[profiles]` debe contener tablas.")
-    profiles: dict[str, Profile] = {}
-    for name, raw in raw_profiles.items():
-        if not isinstance(raw, dict):
-            raise ExportError(f"El perfil `{name}` debe ser una tabla.")
-        title = raw.get("title", name)
-        if not isinstance(title, str):
-            raise ExportError(f"`profiles.{name}.title` debe ser una cadena.")
-        profiles[name] = Profile(
-            name=name,
-            title=title,
-            include=_as_tuple(raw.get("include"), f"profiles.{name}.include"),
-            exclude=_as_tuple(raw.get("exclude"), f"profiles.{name}.exclude"),
-            follow_links=bool(raw.get("follow_links", False)),
-            strip_frontmatter=bool(raw.get("strip_frontmatter", True)),
-            source_markers=bool(raw.get("source_markers", True)),
-            strict_links=bool(raw.get("strict_links", False)),
-            max_chars=int(raw.get("max_chars", 0)),
+    profiles = _profile_table(data.get("profiles", {}), str(config_path))
+    personal_profile_names: set[str] = set()
+    personal_path = _personal_profiles_path(config_path)
+    if personal_path.exists():
+        try:
+            personal_data = tomllib.loads(personal_path.read_text(encoding="utf-8-sig"))
+        except tomllib.TOMLDecodeError as exc:
+            raise ExportError(f"TOML inválido en {personal_path}: {exc}") from exc
+        personal_profiles = _profile_table(
+            personal_data.get("profiles", {}),
+            str(personal_path),
         )
+        profiles.update(personal_profiles)
+        personal_profile_names.update(personal_profiles)
     if default_profile and default_profile not in profiles:
         raise ExportError(f"El perfil predeterminado `{default_profile}` no existe.")
     return ProjectConfig(
@@ -239,7 +264,55 @@ def load_config(config_path: Path, root_override: Path | None = None) -> Project
         default_profile,
         profiles,
         source_languages,
+        personal_profile_names,
     )
+
+
+def _toml_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _toml_string_list(values: Iterable[str]) -> str:
+    return "[" + ", ".join(_toml_string(value) for value in values) + "]"
+
+
+def save_personal_profile(config: ProjectConfig, profile: Profile) -> Path:
+    if profile.name in config.profiles and profile.name not in config.personal_profile_names:
+        raise ExportError(
+            f"`{profile.name}` es un perfil compartido; elige otro nombre para el perfil personal."
+        )
+    profiles = {
+        name: config.profiles[name]
+        for name in config.personal_profile_names
+        if name in config.profiles
+    }
+    profiles[profile.name] = profile
+    lines = [
+        "# Perfiles personales del exportador. Este archivo no se versiona.",
+        "",
+    ]
+    for name in sorted(profiles):
+        saved = profiles[name]
+        lines.extend(
+            [
+                f"[profiles.{_toml_string(name)}]",
+                f"title = {_toml_string(saved.title)}",
+                f"include = {_toml_string_list(saved.include)}",
+                f"exclude = {_toml_string_list(saved.exclude)}",
+                f"follow_links = {str(saved.follow_links).lower()}",
+                f"strip_frontmatter = {str(saved.strip_frontmatter).lower()}",
+                f"source_markers = {str(saved.source_markers).lower()}",
+                f"strict_links = {str(saved.strict_links).lower()}",
+                f"max_chars = {saved.max_chars}",
+                f"zip_tree = {str(saved.zip_tree).lower()}",
+                "",
+            ]
+        )
+    target = _personal_profiles_path(config.config_path)
+    _atomic_write(target, "\n".join(lines))
+    config.profiles[profile.name] = profile
+    config.personal_profile_names.add(profile.name)
+    return target
 
 
 def options_from_profile(
@@ -256,7 +329,7 @@ def options_from_profile(
     strict_links: bool | None = None,
     max_chars: int | None = None,
     timestamp: bool = False,
-    zip_tree: bool = False,
+    zip_tree: bool | None = None,
 ) -> ExportOptions:
     if profile_name:
         try:
@@ -280,7 +353,7 @@ def options_from_profile(
         strict_links=profile.strict_links if strict_links is None else strict_links,
         max_chars=profile.max_chars if max_chars is None else max_chars,
         timestamp=timestamp,
-        zip_tree=zip_tree,
+        zip_tree=profile.zip_tree if zip_tree is None else zip_tree,
         output=output.resolve() if output is not None else None,
         source_languages=config.source_languages,
     )

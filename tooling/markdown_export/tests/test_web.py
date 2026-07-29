@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from tooling.markdown_export.core import ProjectConfig, Profile
+from tooling.markdown_export.core import ProjectConfig, Profile, load_config
 from tooling.markdown_export.web import PROTOCOL_VERSION, _ready_payload, create_server
 
 
@@ -18,6 +18,19 @@ class WebTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         (self.root / "a.md").write_text("# A\n[[b]]\n", encoding="utf-8")
         (self.root / "b.md").write_text("# B\n", encoding="utf-8")
+        (self.root / "profiles.toml").write_text(
+            """
+[export]
+root = "."
+output_dir = "exports"
+default_profile = "test"
+
+[profiles.test]
+title = "Test"
+include = ["a.md"]
+""".lstrip(),
+            encoding="utf-8",
+        )
         profile = Profile("test", "Test", ("a.md",))
         self.config = ProjectConfig(
             self.root / "profiles.toml",
@@ -108,6 +121,36 @@ class WebTests(unittest.TestCase):
             self.request("/api/preview", payload=payload, token=self.token)
         self.assertEqual(traversal_error.exception.code, 400)
         traversal_error.exception.close()
+
+    def test_personal_profile_is_saved_and_reloaded(self) -> None:
+        payload = self.payload()
+        payload.update(
+            {
+                "profile_name": "mi-contexto",
+                "profile_title": "Mi contexto",
+                "profile": "",
+                "files": ["a.md", "b.md"],
+                "zip_tree": True,
+            }
+        )
+        status, saved = self.request(
+            "/api/profiles/save",
+            payload=payload,
+            token=self.token,
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(saved["saved_profile"], "mi-contexto")
+        self.assertTrue(saved["profiles"]["mi-contexto"]["personal"])
+        self.assertTrue(saved["profiles"]["mi-contexto"]["zip_tree"])
+        local_path = self.root / "profiles.local.toml"
+        self.assertTrue(local_path.exists())
+
+        reloaded = load_config(self.root / "profiles.toml")
+        personal = reloaded.profiles["mi-contexto"]
+        self.assertEqual(personal.title, "Mi contexto")
+        self.assertEqual(personal.include, ("a.md", "b.md"))
+        self.assertTrue(personal.zip_tree)
+        self.assertIn("mi-contexto", reloaded.personal_profile_names)
 
 
 if __name__ == "__main__":
