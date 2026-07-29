@@ -2,7 +2,10 @@
 root = "../.."
 output_dir = "exports"
 default_profile = "current"
-exclude = []
+exclude = [
+    "exports/**",
+    "**/node_modules/**",
+]
 
 [profiles.specification]
 title = "Especificación formal de MUD"
@@ -14,7 +17,7 @@ strict_links = false
 max_chars = 0
 
 [profiles.decisions]
-title = "Decisiones y preguntas abiertas de MUD"
+title = "Decisiones e historial de preguntas de MUD"
 include = [
     "notas/10-registro-de-decisiones.md",
     "notas/preguntas/*.md",
@@ -42,6 +45,22 @@ exclude = [
     "notas/decisiones/ADR-051-grafo-semantico-e-ir-reconstruibles.md",
     "notas/decisiones/ADR-052-pipeline-materializadores-y-conformidad.md",
     "notas/decisiones/ADR-053-operador-semantico-y-flujo-de-autoria.md",
+    "notas/preguntas/Q-001-gramatica-y-saltos-de-linea.md",
+    "notas/preguntas/Q-004-rollback-de-rejected.md",
+    "notas/preguntas/Q-010-estado-de-las-decisiones-de-la-fuente.md",
+    "notas/preguntas/Q-011-vinculacion-nombrada-de-participantes.md",
+    "notas/preguntas/Q-012-valores-given-nombrados.md",
+    "notas/preguntas/Q-013-restricciones-relacionales-entre-participantes-on.md",
+    "notas/preguntas/Q-024-datos-asociados-a-miembros-de-una-family.md",
+    "notas/preguntas/Q-025-destruccion-de-thing-estaticas.md",
+    "notas/preguntas/Q-041-ontologia-de-thing.md",
+    "notas/preguntas/Q-042-especializacion-desde-una-thing-concreta.md",
+    "notas/preguntas/Q-043-ciclos-de-especializacion.md",
+    "notas/preguntas/Q-044-identidad-y-referencias-a-thing-futuras.md",
+    "notas/preguntas/Q-045-contenido-declarativo-de-create.md",
+    "notas/preguntas/Q-048-destruccion-con-descendientes-activos.md",
+    "notas/preguntas/Q-053-conversiones-explicitas.md",
+    "notas/preguntas/Q-055-literales-de-magnitudes-de-punto.md",
 ]
 follow_links = false
 strip_frontmatter = true
@@ -55,6 +74,22 @@ include = ["**/*.md"]
 exclude = [
     "referencias/retiradas/**",
     "aprendizaje/historico/**",
+    "notas/preguntas/Q-001-gramatica-y-saltos-de-linea.md",
+    "notas/preguntas/Q-004-rollback-de-rejected.md",
+    "notas/preguntas/Q-010-estado-de-las-decisiones-de-la-fuente.md",
+    "notas/preguntas/Q-011-vinculacion-nombrada-de-participantes.md",
+    "notas/preguntas/Q-012-valores-given-nombrados.md",
+    "notas/preguntas/Q-013-restricciones-relacionales-entre-participantes-on.md",
+    "notas/preguntas/Q-024-datos-asociados-a-miembros-de-una-family.md",
+    "notas/preguntas/Q-025-destruccion-de-thing-estaticas.md",
+    "notas/preguntas/Q-041-ontologia-de-thing.md",
+    "notas/preguntas/Q-042-especializacion-desde-una-thing-concreta.md",
+    "notas/preguntas/Q-043-ciclos-de-especializacion.md",
+    "notas/preguntas/Q-044-identidad-y-referencias-a-thing-futuras.md",
+    "notas/preguntas/Q-045-contenido-declarativo-de-create.md",
+    "notas/preguntas/Q-048-destruccion-con-descendientes-activos.md",
+    "notas/preguntas/Q-053-conversiones-explicitas.md",
+    "notas/preguntas/Q-055-literales-de-magnitudes-de-punto.md",
 ]
 follow_links = false
 strip_frontmatter = true
