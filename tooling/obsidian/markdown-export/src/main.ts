@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+
 import {
   FileSystemAdapter,
   ItemView,
@@ -16,10 +19,14 @@ type ViewMode = "popout" | "tab";
 
 interface ExportPluginSettings {
   pythonExecutable: string;
+  configPath: string;
+  defaultViewMode: ViewMode;
 }
 
 const DEFAULT_SETTINGS: ExportPluginSettings = {
   pythonExecutable: "python",
+  configPath: "",
+  defaultViewMode: "popout",
 };
 
 class MarkdownExportView extends ItemView {
@@ -124,19 +131,114 @@ class ExportSettingTab extends PluginSettingTab {
 
   override display(): void {
     this.containerEl.empty();
+    this.containerEl.createEl("h2", { text: "Exportador Markdown" });
+    this.containerEl.createEl("p", {
+      text: "Configura solo la integración con el sistema. Las opciones de exportación y los perfiles se gestionan dentro del exportador.",
+    });
+
+    this.containerEl.createEl("h3", { text: "General" });
+    new Setting(this.containerEl)
+      .setName("Apertura predeterminada")
+      .setDesc("Modo usado por el icono de la cinta.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("popout", "Ventana flotante")
+          .addOption("tab", "Pestaña")
+          .setValue(this.plugin.settings.defaultViewMode)
+          .onChange(async (value) => {
+            this.plugin.settings.defaultViewMode = value === "tab" ? "tab" : "popout";
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    this.containerEl.createEl("h3", { text: "Entorno" });
+    let pythonDraft = this.plugin.settings.pythonExecutable;
     new Setting(this.containerEl)
       .setName("Ejecutable de Python")
-      .setDesc("Comando o ruta absoluta que inicia Python 3.11 o posterior.")
-      .addText((text) =>
+      .setDesc("Comando o ruta absoluta de Python 3.11 o posterior. Los cambios se aplican únicamente al pulsar Aplicar.")
+      .addText((text) => {
         text
           .setPlaceholder("python")
           .setValue(this.plugin.settings.pythonExecutable)
-          .onChange(async (value) => {
-            const executable = value.trim() || DEFAULT_SETTINGS.pythonExecutable;
-            this.plugin.settings.pythonExecutable = executable;
-            await this.plugin.saveData(this.plugin.settings);
-            await this.plugin.recreateServerManager();
-          }),
+          .onChange((value) => {
+            pythonDraft = value;
+          });
+      })
+      .addButton((button) =>
+        button.setButtonText("Aplicar").onClick(async () => {
+          await this.plugin.applyRuntimeSettings({
+            pythonExecutable: pythonDraft.trim() || DEFAULT_SETTINGS.pythonExecutable,
+          });
+          this.display();
+        }),
+      );
+
+    let configDraft = this.plugin.settings.configPath;
+    new Setting(this.containerEl)
+      .setName("Archivo de configuración")
+      .setDesc(
+        "Ruta absoluta o relativa a la bóveda. Vacío: usa la configuración del proyecto si existe y, en caso contrario, la configuración genérica incluida.",
+      )
+      .addText((text) => {
+        text
+          .setPlaceholder("Detección automática")
+          .setValue(this.plugin.settings.configPath)
+          .onChange((value) => {
+            configDraft = value;
+          });
+      })
+      .addButton((button) =>
+        button.setButtonText("Aplicar").onClick(async () => {
+          await this.plugin.applyRuntimeSettings({ configPath: configDraft.trim() });
+          this.display();
+        }),
+      );
+
+    const resolved = this.containerEl.createDiv({ cls: "markdown-export-runtime-paths" });
+    resolved.createEl("div", {
+      text: `Configuración efectiva: ${this.plugin.resolvedConfigPath}`,
+    });
+    resolved.createEl("div", {
+      text: `Motor incluido: ${this.plugin.runtimeRoot}`,
+    });
+
+    this.containerEl.createEl("h3", { text: "Diagnóstico" });
+    const status = this.containerEl.createDiv({
+      cls: "markdown-export-diagnostic",
+      text: this.plugin.server.running ? "Servidor en ejecución." : "Servidor detenido.",
+    });
+    new Setting(this.containerEl)
+      .setName("Comprobar entorno")
+      .setDesc("Inicia el motor, valida el protocolo local y vuelve a detenerlo si no hay vistas abiertas.")
+      .addButton((button) =>
+        button.setButtonText("Comprobar").setCta().onClick(async () => {
+          button.setDisabled(true);
+          status.setText("Comprobando Python, configuración y servidor…");
+          try {
+            await this.plugin.checkEnvironment();
+            status.setText("Entorno correcto. El exportador puede iniciarse.");
+          } catch (error) {
+            status.setText(error instanceof Error ? error.message : String(error));
+          } finally {
+            button.setDisabled(false);
+          }
+        }),
+      )
+      .addButton((button) =>
+        button.setButtonText("Reiniciar").onClick(async () => {
+          await this.plugin.recreateServerManager("El servidor se ha reiniciado. Pulsa Reintentar.");
+          status.setText("Servidor reiniciado.");
+        }),
+      );
+
+    new Setting(this.containerEl)
+      .setName("Copiar diagnóstico")
+      .setDesc("Copia rutas y estado técnico para solicitar ayuda. No incluye el contenido de la bóveda.")
+      .addButton((button) =>
+        button.setButtonText("Copiar").onClick(async () => {
+          await navigator.clipboard.writeText(this.plugin.diagnosticSummary());
+          new Notice("Diagnóstico del exportador copiado.");
+        }),
       );
   }
 }
@@ -145,6 +247,29 @@ export default class MarkdownExportPlugin extends Plugin {
   override settings: ExportPluginSettings = DEFAULT_SETTINGS;
   server!: ExportServerManager;
   private vaultRoot = "";
+  private pluginRoot = "";
+
+  get runtimeRoot(): string {
+    return path.join(this.pluginRoot, "python");
+  }
+
+  get resolvedConfigPath(): string {
+    const configured = this.settings.configPath.trim();
+    if (configured) {
+      return path.isAbsolute(configured)
+        ? path.resolve(configured)
+        : path.resolve(this.vaultRoot, configured);
+    }
+    const projectConfig = path.join(
+      this.vaultRoot,
+      "tooling",
+      "markdown_export",
+      "profiles.toml",
+    );
+    return existsSync(projectConfig)
+      ? projectConfig
+      : path.join(this.runtimeRoot, "tooling", "markdown_export", "profiles.toml");
+  }
 
   override async onload(): Promise<void> {
     const adapter = this.app.vault.adapter;
@@ -152,12 +277,16 @@ export default class MarkdownExportPlugin extends Plugin {
       throw new Error("Markdown Export necesita una bóveda local de escritorio.");
     }
     this.vaultRoot = adapter.getBasePath();
+    this.pluginRoot = path.resolve(
+      this.vaultRoot,
+      this.manifest.dir ?? `.obsidian/plugins/${this.manifest.id}`,
+    );
     this.settings = { ...DEFAULT_SETTINGS, ...(await this.loadData() as Partial<ExportPluginSettings> | null) };
     this.createServerManager();
 
     this.registerView(VIEW_TYPE, (leaf) => new MarkdownExportView(leaf, this));
     this.addRibbonIcon("file-output", "Abrir exportador Markdown", () => {
-      void this.openExporter("popout");
+      void this.openExporter(this.settings.defaultViewMode);
     });
     this.addCommand({
       id: "open-markdown-export-popout",
@@ -177,11 +306,46 @@ export default class MarkdownExportPlugin extends Plugin {
     await this.server.stopAll();
   }
 
-  async recreateServerManager(): Promise<void> {
+  async saveSettings(): Promise<void> {
+    await this.saveData(this.settings);
+  }
+
+  async applyRuntimeSettings(
+    changes: Partial<Pick<ExportPluginSettings, "pythonExecutable" | "configPath">>,
+  ): Promise<void> {
+    const next = { ...this.settings, ...changes };
+    if (
+      next.pythonExecutable === this.settings.pythonExecutable
+      && next.configPath === this.settings.configPath
+    ) return;
+    this.settings = next;
+    await this.saveSettings();
+    await this.recreateServerManager(
+      "La configuración del entorno ha cambiado. Pulsa Reintentar.",
+    );
+  }
+
+  async checkEnvironment(): Promise<void> {
+    await this.server.check();
+  }
+
+  diagnosticSummary(): string {
+    return [
+      "Markdown Export",
+      `Plugin: ${this.manifest.version}`,
+      `Python: ${this.settings.pythonExecutable}`,
+      `Bóveda: ${this.vaultRoot}`,
+      `Motor: ${this.runtimeRoot}`,
+      `Configuración: ${this.resolvedConfigPath}`,
+      `Servidor: ${this.server.running ? this.server.url : "detenido"}`,
+    ].join("\n");
+  }
+
+  async recreateServerManager(message: string): Promise<void> {
     await this.server.stopAll();
     for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
       if (leaf.view instanceof MarkdownExportView) {
-        leaf.view.showServerFailure("La configuración de Python ha cambiado. Pulsa Reintentar.");
+        leaf.view.showServerFailure(message);
       }
     }
     this.createServerManager();
@@ -191,6 +355,8 @@ export default class MarkdownExportPlugin extends Plugin {
     this.server = new ExportServerManager({
       pythonExecutable: this.settings.pythonExecutable,
       vaultRoot: this.vaultRoot,
+      runtimeRoot: this.runtimeRoot,
+      configPath: this.resolvedConfigPath,
       onUnexpectedExit: (message) => {
         new Notice(message);
         for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {

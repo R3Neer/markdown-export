@@ -4,6 +4,19 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 export const PLUGIN_ID = "mud-markdown-export";
+const PYTHON_RUNTIME_FILES = ["__init__.py", "__main__.py", "core.py", "web.py"];
+
+export async function copyPythonRuntime(sourcePackage, genericConfig, targetRoot) {
+  const targetPackage = path.join(targetRoot, "tooling", "markdown_export");
+  await mkdir(targetPackage, { recursive: true });
+  await Promise.all([
+    ...PYTHON_RUNTIME_FILES.map((filename) =>
+      copyFile(path.join(sourcePackage, filename), path.join(targetPackage, filename)),
+    ),
+    copyFile(genericConfig, path.join(targetPackage, "profiles.toml")),
+  ]);
+  return targetPackage;
+}
 
 export async function activatePlugin(communityFile) {
   let active = [];
@@ -31,6 +44,11 @@ export async function installLocal(pluginRoot) {
     copyFile(path.join(pluginRoot, "dist", "main.js"), path.join(target, "main.js")),
     copyFile(path.join(pluginRoot, "manifest.json"), path.join(target, "manifest.json")),
     copyFile(path.join(pluginRoot, "styles.css"), path.join(target, "styles.css")),
+    copyPythonRuntime(
+      path.join(repositoryRoot, "tooling", "markdown_export"),
+      path.join(pluginRoot, "resources", "default-profiles.toml"),
+      path.join(target, "python"),
+    ),
   ]);
   const active = await activatePlugin(path.join(configDirectory, "community-plugins.json"));
   return { target, active };

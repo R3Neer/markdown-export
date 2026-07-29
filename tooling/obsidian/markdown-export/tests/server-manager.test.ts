@@ -70,6 +70,8 @@ function managerFor(
   return new ExportServerManager({
     pythonExecutable: "python",
     vaultRoot: root,
+    runtimeRoot: path.join(root, "plugin", "python"),
+    configPath: path.join(root, "profiles.toml"),
     startupTimeoutMs: changes.timeout ?? 100,
     stopGraceMs: 20,
     spawnProcess,
@@ -125,6 +127,8 @@ describe("ExportServerManager", () => {
     const manager = new ExportServerManager({
       pythonExecutable: "python-inexistente",
       vaultRoot: root,
+      runtimeRoot: path.join(root, "plugin", "python"),
+      configPath: path.join(root, "profiles.toml"),
       startupTimeoutMs: 100,
       stopGraceMs: 5,
       spawnProcess,
@@ -140,6 +144,38 @@ describe("ExportServerManager", () => {
     const manager = managerFor(root, children, { timeout: 10 });
     await expect(manager.acquire()).rejects.toThrow(/no respondió/u);
     expect(children[0]?.killed).toBe(true);
+  });
+
+  it("arranca el motor incluido con la raíz y configuración indicadas", async () => {
+    const root = path.resolve("vault");
+    const runtimeRoot = path.join(root, "plugin", "python");
+    const configPath = path.join(root, "custom", "profiles.toml");
+    const child = new FakeChild();
+    const spawnProcess = vi.fn(() => asChild(child)) as unknown as typeof spawn;
+    const manager = new ExportServerManager({
+      pythonExecutable: "python-custom",
+      vaultRoot: root,
+      runtimeRoot,
+      configPath,
+      startupTimeoutMs: 100,
+      stopGraceMs: 20,
+      spawnProcess,
+      fetchHealth: health(root),
+    });
+    const checking = manager.check();
+    child.ready(root, 41004);
+    await expect(checking).resolves.toBe("http://127.0.0.1:41004/");
+    expect(spawnProcess).toHaveBeenCalledWith(
+      "python-custom",
+      expect.arrayContaining([
+        "--config",
+        configPath,
+        "--root",
+        root,
+      ]),
+      expect.objectContaining({ cwd: runtimeRoot, windowsHide: true }),
+    );
+    expect(child.killed).toBe(true);
   });
 
   it("notifica una muerte inesperada y puede arrancar de nuevo", async () => {

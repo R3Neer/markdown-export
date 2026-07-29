@@ -15,6 +15,8 @@ export type HealthRequester = (url: URL) => Promise<HealthResponse>;
 export interface ServerManagerOptions {
   pythonExecutable: string;
   vaultRoot: string;
+  runtimeRoot: string;
+  configPath: string;
   startupTimeoutMs?: number;
   stopGraceMs?: number;
   spawnProcess?: typeof spawn;
@@ -85,6 +87,16 @@ export class ExportServerManager {
     return this.serverUrl;
   }
 
+  get running(): boolean {
+    return this.serverUrl !== null;
+  }
+
+  async check(): Promise<string> {
+    const url = await this.acquire();
+    await this.release();
+    return url;
+  }
+
   async acquire(): Promise<string> {
     this.consumers += 1;
     try {
@@ -124,6 +136,8 @@ export class ExportServerManager {
       "-m",
       "tooling.markdown_export",
       "serve",
+      "--config",
+      this.options.configPath,
       "--root",
       this.options.vaultRoot,
       "--port",
@@ -132,7 +146,7 @@ export class ExportServerManager {
       "--ready-json",
     ];
     const child = this.options.spawnProcess(this.options.pythonExecutable, args, {
-      cwd: this.options.vaultRoot,
+      cwd: this.options.runtimeRoot,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
