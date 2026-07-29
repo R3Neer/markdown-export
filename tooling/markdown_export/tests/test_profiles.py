@@ -26,7 +26,8 @@ class BundledProfileTests(unittest.TestCase):
                 "notas/01-vision-y-alcance.md",
                 "notas/02-modelo-del-lenguaje.md",
                 "notas/03-semantica-de-ejecucion.md",
-                "notas/08-preguntas-abiertas.md",
+                "notas/preguntas/README.md",
+                "notas/preguntas/Q-002-efectos.md",
                 "notas/10-registro-de-decisiones.md",
                 "notas/12-destruccion-colecciones-y-grafo-activo.md",
                 "notas/decisiones/ADR-054-lenguaje.md",
@@ -56,7 +57,8 @@ class BundledProfileTests(unittest.TestCase):
 
         self.assertIn("especificacion/05-texto-fuente.md", selected)
         self.assertIn("notas/decisiones/ADR-055-nueva-decision.md", selected)
-        self.assertIn("notas/08-preguntas-abiertas.md", selected)
+        self.assertIn("notas/preguntas/README.md", selected)
+        self.assertIn("notas/preguntas/Q-002-efectos.md", selected)
         self.assertNotIn(
             "notas/decisiones/ADR-051-grafo-semantico-e-ir-reconstruibles.md",
             selected,

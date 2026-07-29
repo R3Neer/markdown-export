@@ -17,7 +17,7 @@ max_chars = 0
 title = "Decisiones y preguntas abiertas de MUD"
 include = [
     "notas/10-registro-de-decisiones.md",
-    "notas/08-preguntas-abiertas.md",
+    "notas/preguntas/*.md",
     "notas/decisiones/*.md",
 ]
 follow_links = false
@@ -36,7 +36,7 @@ include = [
     "notas/10-registro-de-decisiones.md",
     "notas/decisiones/*.md",
     "notas/12-destruccion-colecciones-y-grafo-activo.md",
-    "notas/08-preguntas-abiertas.md",
+    "notas/preguntas/*.md",
 ]
 exclude = [
     "notas/decisiones/ADR-051-grafo-semantico-e-ir-reconstruibles.md",
