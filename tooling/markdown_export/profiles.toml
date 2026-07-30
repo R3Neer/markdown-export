@@ -57,6 +57,7 @@ exclude = [
     "notas/preguntas/Q-048-destruccion-con-descendientes-activos.md",
     "notas/preguntas/Q-053-conversiones-explicitas.md",
     "notas/preguntas/Q-055-literales-de-magnitudes-de-punto.md",
+    "notas/preguntas/Q-057-capacidad-interior-dentro-de-valores-de-alias.md",
 ]
 follow_links = false
 strip_frontmatter = true
@@ -85,6 +86,7 @@ exclude = [
     "notas/preguntas/Q-048-destruccion-con-descendientes-activos.md",
     "notas/preguntas/Q-053-conversiones-explicitas.md",
     "notas/preguntas/Q-055-literales-de-magnitudes-de-punto.md",
+    "notas/preguntas/Q-057-capacidad-interior-dentro-de-valores-de-alias.md",
 ]
 follow_links = false
 strip_frontmatter = true
