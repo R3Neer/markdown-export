@@ -83,6 +83,20 @@ class MarkdownTransformationTests(VaultCase):
         self.assertRegex(content, r"\[dos también\]\(#mud-doc-.*-detalle\)")
         self.assertIn("[externo](https://example.com)", content)
 
+    def test_inline_code_is_not_treated_as_links(self) -> None:
+        self.write(
+            "a.md",
+            "# A\n`[[NoExiste]]` [[b|B]] ``[falso](manual.pdf) y `código` ``\n",
+        )
+        self.write("b.md", "# B\n")
+        result = build_export(self.options("a.md", follow_links=True))
+        content = result.parts[0].content
+        self.assertIn("`[[NoExiste]]`", content)
+        self.assertIn("``[falso](manual.pdf) y `código` ``", content)
+        self.assertRegex(content, r"\[B\]\(#mud-doc-")
+        self.assertEqual(result.dependency_documents, ("b.md",))
+        self.assertFalse(result.diagnostics)
+
     def test_extensionless_and_angle_bracket_markdown_links_are_resolved(self) -> None:
         self.write("a.md", "# A\n[sin extensión](folder/b) [con espacio](<folder/con espacio.md>)\n")
         self.write("folder/b.md", "# B\n")

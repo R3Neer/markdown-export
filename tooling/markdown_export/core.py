@@ -685,6 +685,44 @@ def _split_wikilink(value: str) -> tuple[str, str | None, str]:
     return target.strip(), heading.strip() if heading_separator else None, display.strip() or target.strip()
 
 
+def _inline_code_segments(line: str) -> Iterator[tuple[str, bool]]:
+    """Separa una línea sin interpretar referencias dentro de spans de código."""
+    cursor = 0
+    plain_start = 0
+    while cursor < len(line):
+        if line[cursor] != "`":
+            cursor += 1
+            continue
+        opening_end = cursor + 1
+        while opening_end < len(line) and line[opening_end] == "`":
+            opening_end += 1
+        width = opening_end - cursor
+        search = opening_end
+        closing_start = -1
+        while search < len(line):
+            candidate = line.find("`" * width, search)
+            if candidate < 0:
+                break
+            before_is_tick = candidate > 0 and line[candidate - 1] == "`"
+            after = candidate + width
+            after_is_tick = after < len(line) and line[after] == "`"
+            if not before_is_tick and not after_is_tick:
+                closing_start = candidate
+                break
+            search = candidate + 1
+        if closing_start < 0:
+            cursor = opening_end
+            continue
+        if plain_start < cursor:
+            yield line[plain_start:cursor], False
+        closing_end = closing_start + width
+        yield line[cursor:closing_end], True
+        cursor = closing_end
+        plain_start = cursor
+    if plain_start < len(line):
+        yield line[plain_start:], False
+
+
 def _iter_local_references(
     text: str,
     index: VaultIndex,
@@ -692,22 +730,25 @@ def _iter_local_references(
     for line, fenced in _fenced_lines(text):
         if fenced:
             continue
-        for match in WIKILINK_RE.finditer(line):
-            target, heading, label = _split_wikilink(match.group(2))
-            yield target, heading, label, bool(match.group(1))
-        for match in MARKDOWN_LINK_RE.finditer(line):
-            raw_target = match.group(3)
-            if raw_target.startswith("<") and raw_target.endswith(">"):
-                raw_target = raw_target[1:-1]
-            if raw_target.casefold().startswith(EXTERNAL_SCHEMES):
+        for segment, inline_code in _inline_code_segments(line):
+            if inline_code:
                 continue
-            if raw_target.startswith("#"):
-                continue
-            target, separator, heading = raw_target.partition("#")
-            if not index.supports_target(target):
-                yield target, heading if separator else None, match.group(2) or Path(target).name, True
-                continue
-            yield target, heading if separator else None, match.group(2) or Path(target).stem, bool(match.group(1))
+            for match in WIKILINK_RE.finditer(segment):
+                target, heading, label = _split_wikilink(match.group(2))
+                yield target, heading, label, bool(match.group(1))
+            for match in MARKDOWN_LINK_RE.finditer(segment):
+                raw_target = match.group(3)
+                if raw_target.startswith("<") and raw_target.endswith(">"):
+                    raw_target = raw_target[1:-1]
+                if raw_target.casefold().startswith(EXTERNAL_SCHEMES):
+                    continue
+                if raw_target.startswith("#"):
+                    continue
+                target, separator, heading = raw_target.partition("#")
+                if not index.supports_target(target):
+                    yield target, heading if separator else None, match.group(2) or Path(target).name, True
+                    continue
+                yield target, heading if separator else None, match.group(2) or Path(target).stem, bool(match.group(1))
 
 
 def _expand_dependencies(
@@ -786,8 +827,6 @@ def _rewrite_line(
         omitted[(label, target_label)] = None
         return label
 
-    line = MARKDOWN_LINK_RE.sub(markdown_replace, line)
-
     def wiki_replace(match: re.Match[str]) -> str:
         embedded = bool(match.group(1))
         target, heading, label = _split_wikilink(match.group(2))
@@ -804,8 +843,14 @@ def _rewrite_line(
         omitted[(label, target_label)] = None
         return label
 
-    line = WIKILINK_RE.sub(wiki_replace, line)
-    return line
+    def rewrite_text(text: str) -> str:
+        rewritten = MARKDOWN_LINK_RE.sub(markdown_replace, text)
+        return WIKILINK_RE.sub(wiki_replace, rewritten)
+
+    return "".join(
+        segment if inline_code else rewrite_text(segment)
+        for segment, inline_code in _inline_code_segments(line)
+    )
 
 
 def _render_document(
