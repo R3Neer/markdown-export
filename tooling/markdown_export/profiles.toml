@@ -2,7 +2,7 @@
 root = "../.."
 output_dir = "exports"
 default_profile = "current"
-source_languages = { ebnf = "ebnf", asdl = "asdl" }
+source_languages = { ebnf = "ebnf", asdl = "asdl", yaml = "yaml" }
 exclude = [
     "exports/**",
     "**/node_modules/**",
@@ -38,8 +38,6 @@ include = [
     "notas/preguntas/*.md",
 ]
 exclude = [
-    "notas/decisiones/ADR-051-grafo-semantico-e-ir-reconstruibles.md",
-    "notas/decisiones/ADR-052-pipeline-materializadores-y-conformidad.md",
     "notas/decisiones/ADR-053-operador-semantico-y-flujo-de-autoria.md",
     "notas/preguntas/Q-001-gramatica-y-saltos-de-linea.md",
     "notas/preguntas/Q-004-rollback-de-rejected.md",

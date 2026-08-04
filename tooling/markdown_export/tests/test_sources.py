@@ -11,7 +11,7 @@ from tooling.markdown_export.core import (
 )
 
 
-SOURCE_LANGUAGES = ((".asdl", "asdl"), (".ebnf", "ebnf"))
+SOURCE_LANGUAGES = ((".asdl", "asdl"), (".ebnf", "ebnf"), (".yaml", "yaml"))
 
 
 class ConfiguredSourceTests(unittest.TestCase):
@@ -59,6 +59,7 @@ class ConfiguredSourceTests(unittest.TestCase):
         self.write("specification/chapter.md", "# Capítulo\n")
         self.write("specification/grammar.ebnf", "rule = value;\n")
         self.write("specification/actions.asdl", "action Example\n")
+        self.write("specification/model.yaml", "root: Example\n")
         self.write("specification/ignored.txt", "no\n")
 
         result = build_export(self.options("specification"))
@@ -69,10 +70,12 @@ class ConfiguredSourceTests(unittest.TestCase):
                 "specification/actions.asdl",
                 "specification/chapter.md",
                 "specification/grammar.ebnf",
+                "specification/model.yaml",
             ),
         )
         self.assertIn("```asdl\naction Example\n```", result.parts[0].content)
         self.assertIn("```ebnf\nrule = value;\n```", result.parts[0].content)
+        self.assertIn("```yaml\nroot: Example\n```", result.parts[0].content)
         self.assertNotIn("ignored.txt", result.parts[0].content)
 
 
