@@ -86,7 +86,8 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #8886; p
 const token = __TOKEN__;
 const state = {
   files: [], profiles: {}, selected: new Set(),
-  activeProfile: "", applyingProfile: false
+  activeProfile: "", applyingProfile: false,
+  collapsedFolders: new Set()
 };
 const byId = id => document.getElementById(id);
 async function api(path, options = {}) {
@@ -100,6 +101,7 @@ async function api(path, options = {}) {
 function setText(element, value) { element.textContent = value; }
 function renderFiles() {
   const tree = byId("tree");
+  const scrollTop = tree.scrollTop;
   tree.replaceChildren();
   const query = byId("search").value.toLocaleLowerCase();
   const visible = state.files.filter(path => path.toLocaleLowerCase().includes(query));
@@ -110,9 +112,16 @@ function renderFiles() {
     for (const directory of parts.slice(0, -1)) node = (node[directory] ||= {});
     (node.__files ||= []).push(path);
   }
-  function appendBranch(parent, node) {
+  function appendBranch(parent, node, parentPath = "") {
     for (const name of Object.keys(node).filter(x => x !== "__files").sort()) {
-      const details = document.createElement("details"); details.open = true;
+      const folderPath = parentPath ? parentPath + "/" + name : name;
+      const details = document.createElement("details");
+      details.open = !state.collapsedFolders.has(folderPath);
+      details.addEventListener("toggle", () => {
+        details.open
+          ? state.collapsedFolders.delete(folderPath)
+          : state.collapsedFolders.add(folderPath);
+      });
       const summary = document.createElement("summary");
       const folder = document.createElement("input"); folder.type = "checkbox";
       const descendants = [];
@@ -124,6 +133,7 @@ function renderFiles() {
       const selectedCount = descendants.filter(path => state.selected.has(path)).length;
       folder.checked = selectedCount === descendants.length && descendants.length > 0;
       folder.indeterminate = selectedCount > 0 && selectedCount < descendants.length;
+      folder.addEventListener("click", event => event.stopPropagation());
       folder.addEventListener("change", event => {
         event.stopPropagation();
         for (const path of descendants) folder.checked ? state.selected.add(path) : state.selected.delete(path);
@@ -132,7 +142,7 @@ function renderFiles() {
       summary.append(folder, document.createTextNode(" " + name));
       details.append(summary);
       const contents = document.createElement("div"); contents.style.paddingLeft = "1.2rem";
-      appendBranch(contents, node[name]); details.append(contents); parent.append(details);
+      appendBranch(contents, node[name], folderPath); details.append(contents); parent.append(details);
     }
     for (const path of node.__files || []) {
       const label = document.createElement("label");
@@ -148,6 +158,7 @@ function renderFiles() {
     }
   }
   appendBranch(tree, root);
+  tree.scrollTop = scrollTop;
 }
 function renderProfileOptions(selected = "") {
   const select = byId("profile");
@@ -174,7 +185,8 @@ function profileMatches(profile) {
     && byId("strict").checked === profile.strict_links
     && byId("zipTree").checked === profile.zip_tree
     && Number(byId("maxChars").value || 0) === profile.max_chars
-    && JSON.stringify(files) === JSON.stringify(profile.files);
+    && files.length === profile.files.length
+    && profile.files.every(path => state.selected.has(path));
 }
 function updateProfileState() {
   if (state.applyingProfile) return;

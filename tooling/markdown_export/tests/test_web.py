@@ -9,7 +9,7 @@ import urllib.request
 from pathlib import Path
 
 from tooling.markdown_export.core import ProjectConfig, Profile, load_config
-from tooling.markdown_export.web import PROTOCOL_VERSION, _ready_payload, create_server
+from tooling.markdown_export.web import HTML, PROTOCOL_VERSION, _ready_payload, create_server
 
 
 class WebTests(unittest.TestCase):
@@ -77,6 +77,20 @@ include = ["a.md"]
             "max_chars": 0,
             "zip_tree": False,
         }
+
+    def test_interface_matches_profiles_without_requiring_catalog_order(self) -> None:
+        self.assertIn("files.length === profile.files.length", HTML)
+        self.assertIn("profile.files.every(path => state.selected.has(path))", HTML)
+        self.assertNotIn(
+            "JSON.stringify(files) === JSON.stringify(profile.files)",
+            HTML,
+        )
+
+    def test_interface_preserves_collapsed_folders_when_tree_is_rendered(self) -> None:
+        self.assertIn("collapsedFolders: new Set()", HTML)
+        self.assertIn("!state.collapsedFolders.has(folderPath)", HTML)
+        self.assertIn("state.collapsedFolders.add(folderPath)", HTML)
+        self.assertIn('folder.addEventListener("click", event => event.stopPropagation())', HTML)
 
     def test_tree_preview_and_export(self) -> None:
         status, health = self.request("/api/health")
