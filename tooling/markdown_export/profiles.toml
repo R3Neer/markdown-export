@@ -56,6 +56,8 @@ exclude = [
     "notas/preguntas/Q-049-destruccion-y-colecciones-de-thing.md",
     "notas/preguntas/Q-053-conversiones-explicitas.md",
     "notas/preguntas/Q-057-capacidad-interior-dentro-de-valores-de-alias.md",
+    "notas/preguntas/Q-054-catalogo-y-resolucion-lexica-de-unidades-y-prefijos.md",
+    "notas/preguntas/Q-055-literales-de-magnitudes-de-punto.md",
 ]
 follow_links = false
 strip_frontmatter = true
@@ -85,6 +87,8 @@ exclude = [
     "notas/preguntas/Q-049-destruccion-y-colecciones-de-thing.md",
     "notas/preguntas/Q-053-conversiones-explicitas.md",
     "notas/preguntas/Q-057-capacidad-interior-dentro-de-valores-de-alias.md",
+    "notas/preguntas/Q-054-catalogo-y-resolucion-lexica-de-unidades-y-prefijos.md",
+    "notas/preguntas/Q-055-literales-de-magnitudes-de-punto.md",
 ]
 follow_links = false
 strip_frontmatter = true
