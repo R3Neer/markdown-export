@@ -58,6 +58,7 @@ exclude = [
     "notas/preguntas/Q-052-entrega-de-message.md",
     "notas/preguntas/Q-053-conversiones-explicitas.md",
     "notas/preguntas/Q-057-capacidad-interior-dentro-de-valores-de-alias.md",
+    "notas/preguntas/Q-061-forma-de-datos-calculados-de-family.md",
     "notas/preguntas/Q-054-catalogo-y-resolucion-lexica-de-unidades-y-prefijos.md",
     "notas/preguntas/Q-055-literales-de-magnitudes-de-punto.md",
 ]
@@ -90,6 +91,7 @@ exclude = [
     "notas/preguntas/Q-052-entrega-de-message.md",
     "notas/preguntas/Q-053-conversiones-explicitas.md",
     "notas/preguntas/Q-057-capacidad-interior-dentro-de-valores-de-alias.md",
+    "notas/preguntas/Q-061-forma-de-datos-calculados-de-family.md",
     "notas/preguntas/Q-054-catalogo-y-resolucion-lexica-de-unidades-y-prefijos.md",
     "notas/preguntas/Q-055-literales-de-magnitudes-de-punto.md",
 ]
