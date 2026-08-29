@@ -45,7 +45,7 @@ La integración local de Obsidian utiliza además `--port 0 --ready-json`: el si
 - `specification`: especificación formal.
 - `decisions`: registro, preguntas abiertas y ADR.
 - `language`: semántica vigente del lenguaje, sin decisiones de arquitectura o producto.
-- `current`: corpus vigente completo, salvo referencias retiradas y aprendizaje histórico.
+- `current`: corpus vigente completo, salvo referencias retiradas.
 
 Los perfiles conservan su orden explícito y no siguen enlaces por defecto. Las dependencias descubiertas con `--follow-links` se añaden una sola vez y en orden determinista.
 

@@ -71,7 +71,6 @@ max_chars = 0
 title = "Corpus vigente completo"
 include = ["."]
 exclude = [
-    "aprendizaje/historico/**",
     "notas/preguntas/Q-001-gramatica-y-saltos-de-linea.md",
     "notas/preguntas/Q-004-rollback-de-rejected.md",
     "notas/preguntas/Q-010-estado-de-las-decisiones-de-la-fuente.md",
