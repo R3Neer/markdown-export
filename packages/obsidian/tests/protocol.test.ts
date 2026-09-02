@@ -6,8 +6,8 @@ import { parseReadyMessage, PROTOCOL_VERSION, validateHealthMessage } from "../s
 
 const root = path.resolve("test-vault");
 
-describe("protocolo del exportador", () => {
-  it("acepta mensajes locales con la versión y raíz esperadas", () => {
+describe("exporter protocol", () => {
+  it("accepts local messages with the expected version and root", () => {
     const ready = parseReadyMessage(
       JSON.stringify({
         event: "ready",
@@ -29,8 +29,8 @@ describe("protocolo del exportador", () => {
     });
   });
 
-  it("rechaza JSON inválido, servidores remotos, versiones y raíces incompatibles", () => {
-    expect(() => parseReadyMessage("no-json", root)).toThrow(/JSON válido/u);
+  it("rejects invalid JSON, remote servers, versions and incompatible roots", () => {
+    expect(() => parseReadyMessage("no-json", root)).toThrow(/valid JSON/u);
     expect(() => parseReadyMessage(JSON.stringify({
       event: "ready",
       url: "http://localhost:1234/",
@@ -42,11 +42,11 @@ describe("protocolo del exportador", () => {
       url: "http://127.0.0.1:1234/",
       protocol_version: 999,
       root,
-    }), root)).toThrow(/protocolo/u);
+    }), root)).toThrow(/protocol/u);
     expect(() => validateHealthMessage({
       status: "ok",
       protocol_version: PROTOCOL_VERSION,
       root: path.resolve("other-vault"),
-    }, root)).toThrow(/bóveda distinta/u);
+    }, root)).toThrow(/different vault/u);
   });
 });

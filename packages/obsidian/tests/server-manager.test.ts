@@ -68,9 +68,8 @@ function managerFor(
     return asChild(child);
   }) as unknown as typeof spawn;
   return new ExportServerManager({
-    pythonExecutable: "python",
+    exporterExecutable: "markdown-export",
     vaultRoot: root,
-    runtimeRoot: path.join(root, "plugin", "python"),
     configPath: path.join(root, "profiles.toml"),
     startupTimeoutMs: changes.timeout ?? 100,
     stopGraceMs: 20,
@@ -81,7 +80,7 @@ function managerFor(
 }
 
 describe("ExportServerManager", () => {
-  it("comparte un único arranque y para al liberar la última vista", async () => {
+  it("shares one start and stops after the final view is released", async () => {
     const root = path.resolve("vault");
     const children: FakeChild[] = [];
     const fetchContexts: unknown[] = [];
@@ -101,33 +100,32 @@ describe("ExportServerManager", () => {
     expect(manager.referenceCount).toBe(0);
   });
 
-  it("informa de una salida anterior al handshake y limpia el proceso", async () => {
+  it("reports an exit before the handshake and clears the process", async () => {
     const root = path.resolve("vault");
     const children: FakeChild[] = [];
     const manager = managerFor(root, children);
     const start = manager.acquire();
-    children[0]?.stderr.write("detalle útil\n");
+    children[0]?.stderr.write("useful detail\n");
     children[0]?.emit("exit", 2, null);
-    await expect(start).rejects.toThrow(/detalle útil/u);
+    await expect(start).rejects.toThrow(/useful detail/u);
     expect(manager.referenceCount).toBe(0);
     expect(manager.url).toBeNull();
   });
 
-  it("no se bloquea cuando el ejecutable de Python no existe", async () => {
+  it("does not hang when the exporter executable does not exist", async () => {
     const root = path.resolve("vault");
     const child = new FakeChild();
     child.kill = () => false;
     const spawnProcess = vi.fn(() => {
       queueMicrotask(() => {
-        child.emit("error", new Error("spawn python ENOENT"));
+        child.emit("error", new Error("spawn markdown-export ENOENT"));
         child.emit("close", -2, null);
       });
       return asChild(child);
     }) as unknown as typeof spawn;
     const manager = new ExportServerManager({
-      pythonExecutable: "python-inexistente",
+      exporterExecutable: "missing-markdown-export",
       vaultRoot: root,
-      runtimeRoot: path.join(root, "plugin", "python"),
       configPath: path.join(root, "profiles.toml"),
       startupTimeoutMs: 100,
       stopGraceMs: 5,
@@ -138,24 +136,22 @@ describe("ExportServerManager", () => {
     expect(manager.referenceCount).toBe(0);
   });
 
-  it("aborta un arranque que supera el timeout", async () => {
+  it("aborts a start that exceeds the timeout", async () => {
     const root = path.resolve("vault");
     const children: FakeChild[] = [];
     const manager = managerFor(root, children, { timeout: 10 });
-    await expect(manager.acquire()).rejects.toThrow(/no respondió/u);
+    await expect(manager.acquire()).rejects.toThrow(/did not respond/u);
     expect(children[0]?.killed).toBe(true);
   });
 
-  it("arranca el motor incluido con la raíz y configuración indicadas", async () => {
+  it("starts the external exporter with the requested root and configuration", async () => {
     const root = path.resolve("vault");
-    const runtimeRoot = path.join(root, "plugin", "python");
     const configPath = path.join(root, "custom", "profiles.toml");
     const child = new FakeChild();
     const spawnProcess = vi.fn(() => asChild(child)) as unknown as typeof spawn;
     const manager = new ExportServerManager({
-      pythonExecutable: "python-custom",
+      exporterExecutable: "markdown-export-custom",
       vaultRoot: root,
-      runtimeRoot,
       configPath,
       startupTimeoutMs: 100,
       stopGraceMs: 20,
@@ -166,19 +162,19 @@ describe("ExportServerManager", () => {
     child.ready(root, 41004);
     await expect(checking).resolves.toBe("http://127.0.0.1:41004/");
     expect(spawnProcess).toHaveBeenCalledWith(
-      "python-custom",
+      "markdown-export-custom",
       expect.arrayContaining([
         "--config",
         configPath,
         "--root",
         root,
       ]),
-      expect.objectContaining({ cwd: runtimeRoot, windowsHide: true }),
+      expect.objectContaining({ cwd: root, windowsHide: true }),
     );
     expect(child.killed).toBe(true);
   });
 
-  it("notifica una muerte inesperada y puede arrancar de nuevo", async () => {
+  it("reports an unexpected exit and can restart", async () => {
     const root = path.resolve("vault");
     const children: FakeChild[] = [];
     const onExit = vi.fn();

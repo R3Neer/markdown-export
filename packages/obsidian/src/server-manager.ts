@@ -13,10 +13,9 @@ export interface HealthResponse {
 export type HealthRequester = (url: URL) => Promise<HealthResponse>;
 
 export interface ServerManagerOptions {
-  pythonExecutable: string;
+  exporterExecutable: string;
   vaultRoot: string;
-  runtimeRoot: string;
-  configPath: string;
+  configPath?: string;
   startupTimeoutMs?: number;
   stopGraceMs?: number;
   spawnProcess?: typeof spawn;
@@ -35,7 +34,7 @@ function requestHealthOverHttp(url: URL): Promise<HealthResponse> {
         const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         size += data.length;
         if (size > 65_536) {
-          request.destroy(new Error("La respuesta de salud es demasiado grande."));
+          request.destroy(new Error("The health response is too large."));
           return;
         }
         chunks.push(data);
@@ -51,7 +50,7 @@ function requestHealthOverHttp(url: URL): Promise<HealthResponse> {
       });
     });
     request.setTimeout(3_000, () => {
-      request.destroy(new Error("La comprobación de salud superó 3000 ms."));
+      request.destroy(new Error("The health check exceeded 3000 ms."));
     });
     request.once("error", reject);
   });
@@ -132,12 +131,7 @@ export class ExportServerManager {
   private async start(): Promise<string> {
     this.stderrLines = [];
     const args = [
-      "-u",
-      "-m",
-      "tooling.markdown_export",
       "serve",
-      "--config",
-      this.options.configPath,
       "--root",
       this.options.vaultRoot,
       "--port",
@@ -145,8 +139,9 @@ export class ExportServerManager {
       "--no-browser",
       "--ready-json",
     ];
-    const child = this.options.spawnProcess(this.options.pythonExecutable, args, {
-      cwd: this.options.runtimeRoot,
+    if (this.options.configPath) args.push("--config", this.options.configPath);
+    const child = this.options.spawnProcess(this.options.exporterExecutable, args, {
+      cwd: this.options.vaultRoot,
       windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -157,9 +152,9 @@ export class ExportServerManager {
     const ready = await this.waitUntilReady(child);
     const fetchHealth = this.options.fetchHealth;
     const response = await fetchHealth(new URL("api/health", ready.url));
-    if (!response.ok) throw new Error(`La comprobación de salud devolvió HTTP ${response.status}.`);
+    if (!response.ok) throw new Error(`The health check returned HTTP ${response.status}.`);
     validateHealthMessage(await response.json(), this.options.vaultRoot);
-    if (this.child !== child) throw new Error("El servidor se cerró durante el arranque.");
+    if (this.child !== child) throw new Error("The server closed during start-up.");
     this.serverUrl = ready.url;
     return ready.url;
   }
@@ -190,7 +185,7 @@ export class ExportServerManager {
       };
       const onError = (error: Error): void => finish(error);
       const timer = setTimeout(
-        () => finish(new Error(`El servidor no respondió en ${this.options.startupTimeoutMs} ms.`)),
+        () => finish(new Error(`The server did not respond within ${this.options.startupTimeoutMs} ms.`)),
         this.options.startupTimeoutMs,
       );
       child.stdout.setEncoding("utf8");
@@ -198,7 +193,7 @@ export class ExportServerManager {
       child.once("error", onError);
       child.once("exit", (code, signal) => {
         if (!settled) {
-          finish(new Error(this.exitMessage(code, signal, "El servidor terminó antes de estar disponible.")));
+          finish(new Error(this.exitMessage(code, signal, "The server exited before it became available.")));
           return;
         }
         this.handleExit(child, code, signal);
@@ -218,12 +213,12 @@ export class ExportServerManager {
     const hadConsumers = this.consumers > 0;
     this.consumers = 0;
     if (hadConsumers) {
-      this.options.onUnexpectedExit?.(this.exitMessage(code, signal, "El servidor se cerró inesperadamente."));
+      this.options.onUnexpectedExit?.(this.exitMessage(code, signal, "The server closed unexpectedly."));
     }
   }
 
   private exitMessage(code: number | null, signal: NodeJS.Signals | null, prefix: string): string {
-    const reason = signal !== null ? `señal ${signal}` : `código ${String(code)}`;
+    const reason = signal !== null ? `signal ${signal}` : `exit code ${String(code)}`;
     const details = this.stderrLines.length > 0 ? `\n${this.stderrLines.join("\n")}` : "";
     return `${prefix} (${reason}).${details}`;
   }

@@ -1,0 +1,30 @@
+{
+  "name": "r3-markdown-export-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node packages/obsidian/esbuild.config.mjs",
+    "build": "tsc --noEmit -p packages/obsidian/tsconfig.json && node packages/obsidian/esbuild.config.mjs production",
+    "test": "vitest run packages/obsidian/tests",
+    "lint": "eslint packages/obsidian/src packages/obsidian/tests",
+    "check": "npm run lint && npm test && npm run build",
+    "install-local": "npm run build && node packages/obsidian/scripts/install-local.mjs",
+    "pack:release": "node scripts/pack-release.mjs",
+    "check:versions": "node scripts/check-versions.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.1.2",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.8.0",
+    "obsidian": "^1.13.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.65.0",
+    "vitest": "^4.1.10"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.9",
+    "nanoid": "3.3.18"
+  }
+}

@@ -1,9 +1,13 @@
 import esbuild from "esbuild";
 import process from "node:process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const packageRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const production = process.argv[2] === "production";
 const context = await esbuild.context({
-  entryPoints: ["src/main.ts"],
+  entryPoints: [path.join(packageRoot, "src", "main.ts")],
   bundle: true,
   external: [
     "obsidian",
@@ -27,7 +31,7 @@ const context = await esbuild.context({
   sourcemap: production ? false : "inline",
   treeShaking: true,
   minify: production,
-  outfile: "dist/main.js",
+  outfile: path.join(packageRoot, "dist", "main.js"),
 });
 
 if (production) {

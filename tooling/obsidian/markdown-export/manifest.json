@@ -1,9 +1,0 @@
-{
-  "id": "mud-markdown-export",
-  "name": "Markdown Export",
-  "version": "0.1.0",
-  "minAppVersion": "1.7.2",
-  "description": "Opens the local Markdown exporter in an integrated or pop-out view.",
-  "author": "Samuel",
-  "isDesktopOnly": true
-}

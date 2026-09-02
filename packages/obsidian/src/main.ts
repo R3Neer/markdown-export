@@ -14,17 +14,17 @@ import {
 
 import { ExportServerManager } from "./server-manager";
 
-const VIEW_TYPE = "mud-markdown-export-view";
+const VIEW_TYPE = "r3-markdown-export-view";
 type ViewMode = "popout" | "tab";
 
 interface ExportPluginSettings {
-  pythonExecutable: string;
+  exporterExecutable: string;
   configPath: string;
   defaultViewMode: ViewMode;
 }
 
 const DEFAULT_SETTINGS: ExportPluginSettings = {
-  pythonExecutable: "python",
+  exporterExecutable: "markdown-export",
   configPath: "",
   defaultViewMode: "popout",
 };
@@ -45,7 +45,7 @@ class MarkdownExportView extends ItemView {
   }
 
   override getDisplayText(): string {
-    return "Exportador Markdown";
+    return "R3 Markdown Export";
   }
 
   override getIcon(): string {
@@ -80,7 +80,7 @@ class MarkdownExportView extends ItemView {
   }
 
   private async loadExporter(): Promise<void> {
-    this.renderStatus("Iniciando el exportador…");
+    this.renderStatus("Starting the exporter…");
     try {
       const url = await this.plugin.server.acquire();
       if (!this.attached) {
@@ -93,27 +93,27 @@ class MarkdownExportView extends ItemView {
       if (!this.attached) return;
       const message = error instanceof Error ? error.message : String(error);
       this.renderError(message);
-      new Notice(`No se pudo iniciar el exportador Markdown: ${message}`);
+      new Notice(`R3 Markdown Export could not start: ${message}`);
     }
   }
 
   private prepareContent(): HTMLElement {
     const container = this.contentEl;
     container.empty();
-    container.addClass("mud-markdown-export-view");
+    container.addClass("r3-markdown-export-view");
     return container;
   }
 
   private renderStatus(message: string): void {
-    const status = this.prepareContent().createDiv({ cls: "mud-markdown-export-status" });
+    const status = this.prepareContent().createDiv({ cls: "r3-markdown-export-status" });
     status.createDiv({ text: message });
   }
 
   private renderFrame(url: string): void {
     const frame = this.prepareContent().createEl("iframe", {
-      cls: "mud-markdown-export-frame",
+      cls: "r3-markdown-export-frame",
       attr: {
-        title: "Exportador Markdown",
+        title: "R3 Markdown Export",
         src: url,
         sandbox: "allow-forms allow-same-origin allow-scripts",
         referrerpolicy: "no-referrer",
@@ -123,9 +123,9 @@ class MarkdownExportView extends ItemView {
   }
 
   private renderError(message: string): void {
-    const status = this.prepareContent().createDiv({ cls: "mud-markdown-export-status" });
-    status.createDiv({ cls: "mud-markdown-export-error", text: message });
-    const retry = status.createEl("button", { text: "Reintentar", cls: "mod-cta" });
+    const status = this.prepareContent().createDiv({ cls: "r3-markdown-export-status" });
+    status.createDiv({ cls: "r3-markdown-export-error", text: message });
+    const retry = status.createEl("button", { text: "Retry", cls: "mod-cta" });
     retry.addEventListener("click", () => void this.loadExporter());
   }
 }
@@ -140,19 +140,19 @@ class ExportSettingTab extends PluginSettingTab {
 
   override display(): void {
     this.containerEl.empty();
-    this.containerEl.createEl("h2", { text: "Exportador Markdown" });
+    this.containerEl.createEl("h2", { text: "R3 Markdown Export" });
     this.containerEl.createEl("p", {
-      text: "Configura solo la integración con el sistema. Las opciones de exportación y los perfiles se gestionan dentro del exportador.",
+      text: "Configure the system integration here. Export options and profiles are managed inside the exporter.",
     });
 
     this.containerEl.createEl("h3", { text: "General" });
     new Setting(this.containerEl)
-      .setName("Apertura predeterminada")
-      .setDesc("Modo usado por el icono de la cinta.")
+      .setName("Default opening mode")
+      .setDesc("Mode used by the ribbon icon.")
       .addDropdown((dropdown) =>
         dropdown
-          .addOption("popout", "Ventana flotante")
-          .addOption("tab", "Pestaña")
+          .addOption("popout", "Pop-out window")
+          .addOption("tab", "Tab")
           .setValue(this.plugin.settings.defaultViewMode)
           .onChange(async (value) => {
             this.plugin.settings.defaultViewMode = value === "tab" ? "tab" : "popout";
@@ -160,23 +160,23 @@ class ExportSettingTab extends PluginSettingTab {
           }),
       );
 
-    this.containerEl.createEl("h3", { text: "Entorno" });
-    let pythonDraft = this.plugin.settings.pythonExecutable;
+    this.containerEl.createEl("h3", { text: "Environment" });
+    let executableDraft = this.plugin.settings.exporterExecutable;
     new Setting(this.containerEl)
-      .setName("Ejecutable de Python")
-      .setDesc("Comando o ruta absoluta de Python 3.11 o posterior. Los cambios se aplican únicamente al pulsar Aplicar.")
+      .setName("Markdown Export executable")
+      .setDesc("Command name or absolute path. Install it with pipx before using the plugin.")
       .addText((text) => {
         text
-          .setPlaceholder("python")
-          .setValue(this.plugin.settings.pythonExecutable)
+          .setPlaceholder("markdown-export")
+          .setValue(this.plugin.settings.exporterExecutable)
           .onChange((value) => {
-            pythonDraft = value;
+            executableDraft = value;
           });
       })
       .addButton((button) =>
-        button.setButtonText("Aplicar").onClick(async () => {
+        button.setButtonText("Apply").onClick(async () => {
           await this.plugin.applyRuntimeSettings({
-            pythonExecutable: pythonDraft.trim() || DEFAULT_SETTINGS.pythonExecutable,
+            exporterExecutable: executableDraft.trim() || DEFAULT_SETTINGS.exporterExecutable,
           });
           this.display();
         }),
@@ -184,20 +184,20 @@ class ExportSettingTab extends PluginSettingTab {
 
     let configDraft = this.plugin.settings.configPath;
     new Setting(this.containerEl)
-      .setName("Archivo de configuración")
+      .setName("Configuration file")
       .setDesc(
-        "Ruta absoluta o relativa a la bóveda. Vacío: usa la configuración del proyecto si existe y, en caso contrario, la configuración genérica incluida.",
+        "Absolute path or path relative to the vault. Leave empty to discover markdown-export.toml or use built-in defaults.",
       )
       .addText((text) => {
         text
-          .setPlaceholder("Detección automática")
+          .setPlaceholder("Automatic discovery")
           .setValue(this.plugin.settings.configPath)
           .onChange((value) => {
             configDraft = value;
           });
       })
       .addButton((button) =>
-        button.setButtonText("Aplicar").onClick(async () => {
+        button.setButtonText("Apply").onClick(async () => {
           await this.plugin.applyRuntimeSettings({ configPath: configDraft.trim() });
           this.display();
         }),
@@ -205,27 +205,23 @@ class ExportSettingTab extends PluginSettingTab {
 
     const resolved = this.containerEl.createDiv({ cls: "markdown-export-runtime-paths" });
     resolved.createEl("div", {
-      text: `Configuración efectiva: ${this.plugin.resolvedConfigPath}`,
+      text: `Effective configuration: ${this.plugin.resolvedConfigPath || "built-in defaults"}`,
     });
-    resolved.createEl("div", {
-      text: `Motor incluido: ${this.plugin.runtimeRoot}`,
-    });
-
-    this.containerEl.createEl("h3", { text: "Diagnóstico" });
+    this.containerEl.createEl("h3", { text: "Diagnostics" });
     const status = this.containerEl.createDiv({
       cls: "markdown-export-diagnostic",
-      text: this.plugin.server.running ? "Servidor en ejecución." : "Servidor detenido.",
+      text: this.plugin.server.running ? "Server running." : "Server stopped.",
     });
     new Setting(this.containerEl)
-      .setName("Comprobar entorno")
-      .setDesc("Inicia el motor, valida el protocolo local y vuelve a detenerlo si no hay vistas abiertas.")
+      .setName("Check environment")
+      .setDesc("Starts the exporter, validates its local protocol and stops it again when no views are open.")
       .addButton((button) =>
-        button.setButtonText("Comprobar").setCta().onClick(async () => {
+        button.setButtonText("Check").setCta().onClick(async () => {
           button.setDisabled(true);
-          status.setText("Comprobando Python, configuración y servidor…");
+          status.setText("Checking executable, configuration and server…");
           try {
             await this.plugin.checkEnvironment();
-            status.setText("Entorno correcto. El exportador puede iniciarse.");
+            status.setText("Environment ready. The exporter can start.");
           } catch (error) {
             status.setText(error instanceof Error ? error.message : String(error));
           } finally {
@@ -234,19 +230,19 @@ class ExportSettingTab extends PluginSettingTab {
         }),
       )
       .addButton((button) =>
-        button.setButtonText("Reiniciar").onClick(async () => {
-          await this.plugin.recreateServerManager("El servidor se ha reiniciado. Pulsa Reintentar.");
-          status.setText("Servidor reiniciado.");
+        button.setButtonText("Restart").onClick(async () => {
+          await this.plugin.recreateServerManager("The server has restarted. Select Retry.");
+          status.setText("Server restarted.");
         }),
       );
 
     new Setting(this.containerEl)
-      .setName("Copiar diagnóstico")
-      .setDesc("Copia rutas y estado técnico para solicitar ayuda. No incluye el contenido de la bóveda.")
+      .setName("Copy diagnostics")
+      .setDesc("Copies paths and technical state for support. It never includes vault contents.")
       .addButton((button) =>
-        button.setButtonText("Copiar").onClick(async () => {
+        button.setButtonText("Copy").onClick(async () => {
           await navigator.clipboard.writeText(this.plugin.diagnosticSummary());
-          new Notice("Diagnóstico del exportador copiado.");
+          new Notice("Exporter diagnostics copied.");
         }),
       );
   }
@@ -256,11 +252,6 @@ export default class MarkdownExportPlugin extends Plugin {
   override settings: ExportPluginSettings = DEFAULT_SETTINGS;
   server!: ExportServerManager;
   private vaultRoot = "";
-  private pluginRoot = "";
-
-  get runtimeRoot(): string {
-    return path.join(this.pluginRoot, "python");
-  }
 
   get resolvedConfigPath(): string {
     const configured = this.settings.configPath.trim();
@@ -269,42 +260,31 @@ export default class MarkdownExportPlugin extends Plugin {
         ? path.resolve(configured)
         : path.resolve(this.vaultRoot, configured);
     }
-    const projectConfig = path.join(
-      this.vaultRoot,
-      "tooling",
-      "markdown_export",
-      "profiles.toml",
-    );
-    return existsSync(projectConfig)
-      ? projectConfig
-      : path.join(this.runtimeRoot, "tooling", "markdown_export", "profiles.toml");
+    const projectConfig = path.join(this.vaultRoot, "markdown-export.toml");
+    return existsSync(projectConfig) ? projectConfig : "";
   }
 
   override async onload(): Promise<void> {
     const adapter = this.app.vault.adapter;
     if (!(adapter instanceof FileSystemAdapter)) {
-      throw new Error("Markdown Export necesita una bóveda local de escritorio.");
+      throw new Error("R3 Markdown Export requires a local desktop vault.");
     }
     this.vaultRoot = adapter.getBasePath();
-    this.pluginRoot = path.resolve(
-      this.vaultRoot,
-      this.manifest.dir ?? `.obsidian/plugins/${this.manifest.id}`,
-    );
     this.settings = { ...DEFAULT_SETTINGS, ...(await this.loadData() as Partial<ExportPluginSettings> | null) };
     this.createServerManager();
 
     this.registerView(VIEW_TYPE, (leaf) => new MarkdownExportView(leaf, this));
-    this.addRibbonIcon("file-output", "Abrir exportador Markdown", () => {
+    this.addRibbonIcon("file-output", "Open R3 Markdown Export", () => {
       void this.openExporter(this.settings.defaultViewMode);
     });
     this.addCommand({
-      id: "open-markdown-export-popout",
-      name: "Abrir exportador en ventana flotante",
+      id: "open-popout",
+      name: "Open exporter in a pop-out window",
       callback: () => void this.openExporter("popout"),
     });
     this.addCommand({
-      id: "open-markdown-export-tab",
-      name: "Abrir exportador en pestaña",
+      id: "open-tab",
+      name: "Open exporter in a tab",
       callback: () => void this.openExporter("tab"),
     });
     this.addSettingTab(new ExportSettingTab(this.app, this));
@@ -320,17 +300,17 @@ export default class MarkdownExportPlugin extends Plugin {
   }
 
   async applyRuntimeSettings(
-    changes: Partial<Pick<ExportPluginSettings, "pythonExecutable" | "configPath">>,
+    changes: Partial<Pick<ExportPluginSettings, "exporterExecutable" | "configPath">>,
   ): Promise<void> {
     const next = { ...this.settings, ...changes };
     if (
-      next.pythonExecutable === this.settings.pythonExecutable
+      next.exporterExecutable === this.settings.exporterExecutable
       && next.configPath === this.settings.configPath
     ) return;
     this.settings = next;
     await this.saveSettings();
     await this.recreateServerManager(
-      "La configuración del entorno ha cambiado. Pulsa Reintentar.",
+      "The environment configuration has changed. Select Retry.",
     );
   }
 
@@ -340,13 +320,12 @@ export default class MarkdownExportPlugin extends Plugin {
 
   diagnosticSummary(): string {
     return [
-      "Markdown Export",
+      "R3 Markdown Export",
       `Plugin: ${this.manifest.version}`,
-      `Python: ${this.settings.pythonExecutable}`,
-      `Bóveda: ${this.vaultRoot}`,
-      `Motor: ${this.runtimeRoot}`,
-      `Configuración: ${this.resolvedConfigPath}`,
-      `Servidor: ${this.server.running ? this.server.url : "detenido"}`,
+      `Executable: ${this.settings.exporterExecutable}`,
+      `Vault: ${this.vaultRoot}`,
+      `Configuration: ${this.resolvedConfigPath || "built-in defaults"}`,
+      `Server: ${this.server.running ? this.server.url : "stopped"}`,
     ].join("\n");
   }
 
@@ -362,10 +341,9 @@ export default class MarkdownExportPlugin extends Plugin {
 
   private createServerManager(): void {
     this.server = new ExportServerManager({
-      pythonExecutable: this.settings.pythonExecutable,
+      exporterExecutable: this.settings.exporterExecutable,
       vaultRoot: this.vaultRoot,
-      runtimeRoot: this.runtimeRoot,
-      configPath: this.resolvedConfigPath,
+      configPath: this.resolvedConfigPath || undefined,
       onUnexpectedExit: (message) => {
         new Notice(message);
         for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE)) {
