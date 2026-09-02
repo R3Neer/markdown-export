@@ -1,0 +1,13 @@
+[export]
+root = "."
+output_dir = "exports"
+default_profile = "markdown"
+
+[profiles.markdown]
+title = "All Markdown"
+include = ["."]
+follow_links = false
+strip_frontmatter = true
+source_markers = true
+strict_links = false
+max_chars = 0

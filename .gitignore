@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+.pytest-tmp/
+.venv/
+.smoke/
+dist/
+release/
+node_modules/
+packages/obsidian/dist/
+.markdown-export.local.toml
+exports/

@@ -8,8 +8,8 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from tooling.markdown_export.core import ProjectConfig, Profile, load_config
-from tooling.markdown_export.web import HTML, PROTOCOL_VERSION, _ready_payload, create_server
+from markdown_export.core import ProjectConfig, Profile, load_config
+from markdown_export.web import HTML, PROTOCOL_VERSION, _ready_payload, create_server
 
 
 class WebTests(unittest.TestCase):
@@ -140,8 +140,8 @@ include = ["a.md"]
         payload = self.payload()
         payload.update(
             {
-                "profile_name": "mi-contexto",
-                "profile_title": "Mi contexto",
+                "profile_name": "my-context",
+                "profile_title": "My context",
                 "profile": "",
                 "files": ["a.md", "b.md"],
                 "zip_tree": True,
@@ -153,29 +153,29 @@ include = ["a.md"]
             token=self.token,
         )
         self.assertEqual(status, 200)
-        self.assertEqual(saved["saved_profile"], "mi-contexto")
-        self.assertTrue(saved["profiles"]["mi-contexto"]["personal"])
-        self.assertTrue(saved["profiles"]["mi-contexto"]["zip_tree"])
+        self.assertEqual(saved["saved_profile"], "my-context")
+        self.assertTrue(saved["profiles"]["my-context"]["personal"])
+        self.assertTrue(saved["profiles"]["my-context"]["zip_tree"])
         local_path = self.root / "profiles.local.toml"
         self.assertTrue(local_path.exists())
 
         reloaded = load_config(self.root / "profiles.toml")
-        personal = reloaded.profiles["mi-contexto"]
-        self.assertEqual(personal.title, "Mi contexto")
+        personal = reloaded.profiles["my-context"]
+        self.assertEqual(personal.title, "My context")
         self.assertEqual(personal.include, ("a.md", "b.md"))
         self.assertTrue(personal.zip_tree)
-        self.assertIn("mi-contexto", reloaded.personal_profile_names)
+        self.assertIn("my-context", reloaded.personal_profile_names)
 
     def test_tree_reload_is_fresh_and_explicit_refresh_updates_open_page(self) -> None:
         status, initial = self.request("/api/tree")
         self.assertEqual(status, 200)
         self.assertNotIn("new.md", initial["files"])
-        (self.root / "new.md").write_text("# Nuevo\n", encoding="utf-8")
+        (self.root / "new.md").write_text("# New\n", encoding="utf-8")
 
         status, reloaded = self.request("/api/tree")
         self.assertEqual(status, 200)
         self.assertIn("new.md", reloaded["files"])
-        (self.root / "later.md").write_text("# Posterior\n", encoding="utf-8")
+        (self.root / "later.md").write_text("# Later\n", encoding="utf-8")
 
         status, refreshed = self.request(
             "/api/refresh",

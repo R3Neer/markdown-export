@@ -1,4 +1,4 @@
-"""Exportador portable de bóvedas Markdown."""
+"""Portable Markdown exports for local vaults and document collections."""
 
 from .core import (
     Diagnostic,
@@ -11,6 +11,8 @@ from .core import (
     write_export,
 )
 
+__version__ = "0.1.0"
+
 __all__ = [
     "Diagnostic",
     "ExportError",
@@ -20,4 +22,5 @@ __all__ = [
     "build_export",
     "load_config",
     "write_export",
+    "__version__",
 ]

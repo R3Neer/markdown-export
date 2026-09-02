@@ -26,11 +26,11 @@ PROTOCOL_VERSION = 1
 
 
 HTML = """<!doctype html>
-<html lang="es">
+<html lang="en-GB">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Exportador Markdown</title>
+<title>R3 Markdown Export</title>
 <style>
 :root { color-scheme: light dark; font: 16px system-ui, sans-serif; }
 body { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
@@ -50,35 +50,35 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid #8886; p
 </style>
 </head>
 <body>
-<h1>Exportador Markdown</h1>
+<h1>R3 Markdown Export</h1>
 <div class="layout">
 <section>
 <div class="profile-actions">
-<label>Perfil <select id="profile"></select></label>
-<button id="showSaveProfile" type="button">Guardar como perfil…</button>
+<label>Profile <select id="profile"></select></label>
+<button id="showSaveProfile" type="button">Save as profile…</button>
 </div>
 <div id="savePanel" hidden>
-  <label>Nombre del perfil <input id="profileName" type="text"></label>
-  <label>Título visible <input id="profileTitle" type="text"></label>
-  <button id="saveProfile" type="button">Guardar</button>
-  <button id="cancelSaveProfile" type="button">Cancelar</button>
+  <label>Profile name <input id="profileName" type="text"></label>
+  <label>Display title <input id="profileTitle" type="text"></label>
+  <button id="saveProfile" type="button">Save</button>
+  <button id="cancelSaveProfile" type="button">Cancel</button>
 </div>
 <div class="search-actions">
-<label>Buscar <input id="search" type="text"></label>
-<button id="refreshFiles" type="button">Actualizar archivos</button>
+<label>Search <input id="search" type="text"></label>
+<button id="refreshFiles" type="button">Refresh files</button>
 </div>
-<fieldset><legend>Documentos</legend><div id="tree"></div></fieldset>
+<fieldset><legend>Documents</legend><div id="tree"></div></fieldset>
 </section>
 <section>
-<label>Nombre del export <input id="name" type="text" value="export"></label>
-<label><input id="follow" type="checkbox"> Seguir enlaces</label>
-<label><input id="strip" type="checkbox" checked> Retirar frontmatter</label>
-<label><input id="markers" type="checkbox" checked> Marcadores de procedencia</label>
-<label><input id="strict" type="checkbox"> Enlaces estrictos</label>
-<label><input id="zipTree" type="checkbox"> ZIP con archivos separados (conservar carpetas)</label>
-<label>Límite de caracteres (0 = sin límite) <input id="maxChars" type="number" min="0" value="0"></label>
-<p><button id="preview">Previsualizar</button><button id="export">Exportar</button></p>
-<pre id="result">Cargando…</pre>
+<label>Export name <input id="name" type="text" value="export"></label>
+<label><input id="follow" type="checkbox"> Follow links</label>
+<label><input id="strip" type="checkbox" checked> Remove frontmatter</label>
+<label><input id="markers" type="checkbox" checked> Source markers</label>
+<label><input id="strict" type="checkbox"> Strict links</label>
+<label><input id="zipTree" type="checkbox"> ZIP with separate files (preserve folders)</label>
+<label>Character limit (0 = unlimited) <input id="maxChars" type="number" min="0" value="0"></label>
+<p><button id="preview">Preview</button><button id="export">Export</button></p>
+<pre id="result">Loading…</pre>
 </section>
 </div>
 <script>
@@ -164,7 +164,7 @@ function renderProfileOptions(selected = "") {
   const select = byId("profile");
   select.replaceChildren();
   const custom = document.createElement("option");
-  custom.value = ""; setText(custom, "Personalizado (sin guardar)");
+  custom.value = ""; setText(custom, "Custom (unsaved)");
   custom.disabled = true;
   select.append(custom);
   for (const profile of Object.values(state.profiles)) {
@@ -223,15 +223,15 @@ function payload() {
 }
 function showSaveProfile() {
   const base = state.profiles[state.activeProfile];
-  byId("profileName").value = byId("name").value || "perfil";
+  byId("profileName").value = byId("name").value || "profile";
   byId("profileTitle").value = base
-    ? base.title + " personalizado"
-    : byId("name").value || "Perfil personalizado";
+    ? base.title + " custom"
+    : byId("name").value || "Custom profile";
   byId("savePanel").hidden = false;
   byId("profileName").focus();
 }
 async function saveCurrentProfile() {
-  setText(byId("result"), "Guardando perfil…");
+  setText(byId("result"), "Saving profile…");
   try {
     const request = Object.assign(payload(), {
       profile_name: byId("profileName").value,
@@ -246,11 +246,11 @@ async function saveCurrentProfile() {
     renderProfileOptions(state.activeProfile);
     byId("savePanel").hidden = true;
     updateProfileState();
-    setText(byId("result"), "Perfil personal guardado.");
+    setText(byId("result"), "Personal profile saved.");
   } catch (error) { setText(byId("result"), "Error: " + error.message); }
 }
 async function refreshFiles() {
-  setText(byId("result"), "Actualizando archivos…");
+  setText(byId("result"), "Refreshing files…");
   const selectedBefore = new Set(state.selected);
   const profileBefore = byId("profile").value;
   try {
@@ -271,22 +271,22 @@ async function refreshFiles() {
       renderFiles();
       updateProfileState();
     }
-    setText(byId("result"), "Archivos actualizados.");
+    setText(byId("result"), "Files refreshed.");
   } catch (error) { setText(byId("result"), "Error: " + error.message); }
 }
 async function run(action) {
-  setText(byId("result"), "Procesando…");
+  setText(byId("result"), "Processing…");
   try {
     const data = await api("/api/" + action, {method: "POST", body: JSON.stringify(payload())});
     const lines = [
-      action === "export" ? "Export completado." : "Previsualización.",
-      "Explícitos: " + data.explicit.length,
-      "Dependencias: " + data.dependencies.length,
-      "Partes: " + data.parts.length,
-      "Caracteres: " + data.characters
+      action === "export" ? "Export complete." : "Preview.",
+      "Explicit: " + data.explicit.length,
+      "Dependencies: " + data.dependencies.length,
+      "Parts: " + data.parts.length,
+      "Characters: " + data.characters
     ];
-    if (data.outputs) lines.push("Salidas:\\n" + data.outputs.join("\\n"));
-    if (data.diagnostics.length) lines.push("Avisos:\\n" + data.diagnostics.map(x => x.level + " " + x.code + ": " + x.message).join("\\n"));
+    if (data.outputs) lines.push("Outputs:\\n" + data.outputs.join("\\n"));
+    if (data.diagnostics.length) lines.push("Diagnostics:\\n" + data.diagnostics.map(x => x.level + " " + x.code + ": " + x.message).join("\\n"));
     setText(byId("result"), lines.join("\\n"));
   } catch (error) { setText(byId("result"), "Error: " + error.message); }
 }
@@ -295,7 +295,7 @@ async function start() {
   state.files = data.files; state.profiles = data.profiles;
   state.activeProfile = data.default_profile;
   renderProfileOptions(state.activeProfile);
-  applyProfile(); setText(byId("result"), "Listo.");
+  applyProfile(); setText(byId("result"), "Ready.");
 }
 byId("search").addEventListener("input", renderFiles);
 byId("profile").addEventListener("change", applyProfile);
@@ -431,11 +431,11 @@ def create_server(
             if self.path == "/api/profiles":
                 self._json(HTTPStatus.OK, _tree_payload(config, get_index()))
                 return
-            self._json(HTTPStatus.NOT_FOUND, {"error": "Recurso inexistente."})
+            self._json(HTTPStatus.NOT_FOUND, {"error": "Resource not found."})
 
         def do_POST(self) -> None:
             if self.headers.get("X-Export-Token") != session_token:
-                self._json(HTTPStatus.FORBIDDEN, {"error": "Token de sesión inválido."})
+                self._json(HTTPStatus.FORBIDDEN, {"error": "Invalid session token."})
                 return
             if self.path not in {
                 "/api/preview",
@@ -443,15 +443,15 @@ def create_server(
                 "/api/profiles/save",
                 "/api/refresh",
             }:
-                self._json(HTTPStatus.NOT_FOUND, {"error": "Recurso inexistente."})
+                self._json(HTTPStatus.NOT_FOUND, {"error": "Resource not found."})
                 return
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 if length > 2_000_000:
-                    raise ExportError("La petición es demasiado grande.")
+                    raise ExportError("The request is too large.")
                 payload = json.loads(self.rfile.read(length))
                 if not isinstance(payload, dict):
-                    raise ExportError("La petición debe ser un objeto JSON.")
+                    raise ExportError("The request must be a JSON object.")
                 if self.path == "/api/refresh":
                     self._json(
                         HTTPStatus.OK,
@@ -460,18 +460,18 @@ def create_server(
                     return
                 files = payload.get("files")
                 if not isinstance(files, list) or not all(isinstance(item, str) for item in files):
-                    raise ExportError("`files` debe ser una lista de rutas.")
+                    raise ExportError("`files` must be an array of paths.")
                 profile = payload.get("profile", "")
                 if not isinstance(profile, str):
-                    raise ExportError("`profile` debe ser una cadena.")
+                    raise ExportError("`profile` must be a string.")
                 if self.path == "/api/profiles/save":
                     profile_name = _safe_name(str(payload.get("profile_name", "")))
                     profile_title = str(payload.get("profile_title", "")).strip()
                     if not profile_title:
-                        raise ExportError("El título visible del perfil no puede estar vacío.")
+                        raise ExportError("The profile display title cannot be empty.")
                     max_chars = int(payload.get("max_chars", 0))
                     if max_chars < 0:
-                        raise ExportError("`max_chars` no puede ser negativo.")
+                        raise ExportError("`max_chars` cannot be negative.")
                     validation_options = options_from_profile(
                         config,
                         profile,
@@ -551,15 +551,19 @@ def serve(
     port: int = 8765,
     open_browser: bool = True,
     ready_json: bool = False,
+    ui: Any | None = None,
 ) -> None:
     server, _token = create_server(config, port=port)
     payload = _ready_payload(config, server)
     url = str(payload["url"])
     if ready_json:
         print(json.dumps(payload, ensure_ascii=False), flush=True)
+    elif ui is not None:
+        ui.info(f"Exporter available at {url}")
+        ui.info("Press Ctrl+C to stop it.")
     else:
-        print(f"Exportador disponible en {url}", flush=True)
-        print("Pulsa Ctrl+C para detenerlo.", flush=True)
+        print(f"Exporter available at {url}", flush=True)
+        print("Press Ctrl+C to stop it.", flush=True)
     if open_browser:
         threading.Timer(0.2, webbrowser.open, args=(url,)).start()
     try:

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tooling.markdown_export.core import (
+from markdown_export.core import (
     ALWAYS_EXCLUDED,
     ExportOptions,
     build_export,
@@ -41,22 +41,22 @@ class ConfiguredSourceTests(unittest.TestCase):
         return ExportOptions(**values)
 
     def test_configured_sources_are_fenced_and_linkable_documents(self) -> None:
-        self.write("index.md", "# Índice\n[Gramática](grammar/mud.ebnf)\n")
-        self.write("grammar/mud.ebnf", 'document = "```";\n')
+        self.write("index.md", "# Index\n[Grammar](grammar/language.ebnf)\n")
+        self.write("grammar/language.ebnf", 'document = "```";\n')
 
         result = build_export(
             self.options("index.md", follow_links=True, strict_links=True)
         )
 
         self.assertEqual(result.explicit_documents, ("index.md",))
-        self.assertEqual(result.dependency_documents, ("grammar/mud.ebnf",))
-        self.assertRegex(result.parts[0].content, r"\[Gramática\]\(#mud-doc-")
-        self.assertIn("## mud.ebnf", result.parts[0].content)
+        self.assertEqual(result.dependency_documents, ("grammar/language.ebnf",))
+        self.assertRegex(result.parts[0].content, r"\[Grammar\]\(#markdown-export-doc-")
+        self.assertIn("## language.ebnf", result.parts[0].content)
         self.assertIn("````ebnf\ndocument = \"```\";\n````", result.parts[0].content)
         self.assertFalse(result.diagnostics)
 
     def test_directory_selection_includes_all_configured_source_languages(self) -> None:
-        self.write("specification/chapter.md", "# Capítulo\n")
+        self.write("specification/chapter.md", "# Chapter\n")
         self.write("specification/grammar.ebnf", "rule = value;\n")
         self.write("specification/actions.asdl", "action Example\n")
         self.write("specification/model.yaml", "root: Example\n")

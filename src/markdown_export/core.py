@@ -14,6 +14,7 @@ import zipfile
 from collections import defaultdict, deque
 from dataclasses import dataclass, field, replace
 from datetime import datetime
+from importlib.resources import files
 from pathlib import Path, PurePosixPath
 from typing import Iterable, Iterator
 from urllib.parse import unquote
@@ -31,7 +32,7 @@ EXTERNAL_SCHEMES = ("http://", "https://", "mailto:", "data:", "ftp://")
 
 
 class ExportError(RuntimeError):
-    """Error esperado y presentable durante la exportación."""
+    """Expected, user-facing export failure."""
 
 
 @dataclass(frozen=True)
@@ -148,7 +149,7 @@ def _as_tuple(value: object, field_name: str) -> tuple[str, ...]:
     if value is None:
         return ()
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        raise ExportError(f"`{field_name}` debe ser una lista de cadenas.")
+        raise ExportError(f"`{field_name}` must be an array of strings.")
     return tuple(value)
 
 
@@ -159,33 +160,33 @@ def _source_languages(value: object) -> tuple[tuple[str, str], ...]:
         isinstance(extension, str) and isinstance(language, str)
         for extension, language in value.items()
     ):
-        raise ExportError("`export.source_languages` debe ser una tabla de cadenas.")
+        raise ExportError("`export.source_languages` must be a table of strings.")
     normalized: dict[str, str] = {}
     for extension, language in value.items():
         suffix = f".{extension.lstrip('.')}".casefold()
         fence_language = language.strip()
         if suffix == ".md":
-            raise ExportError("Markdown no puede redefinirse en `export.source_languages`.")
+            raise ExportError("Markdown cannot be redefined in `export.source_languages`.")
         if not re.fullmatch(r"\.[a-z0-9][a-z0-9_-]*", suffix):
-            raise ExportError(f"Extensión inválida en `export.source_languages`: {extension}")
+            raise ExportError(f"Invalid extension in `export.source_languages`: {extension}")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+-]*", fence_language):
-            raise ExportError(f"Lenguaje de bloque inválido en `export.source_languages`: {language}")
+            raise ExportError(f"Invalid fence language in `export.source_languages`: {language}")
         if suffix in normalized:
-            raise ExportError(f"Extensión duplicada en `export.source_languages`: {suffix}")
+            raise ExportError(f"Duplicate extension in `export.source_languages`: {suffix}")
         normalized[suffix] = fence_language
     return tuple(sorted(normalized.items()))
 
 
 def _profile_table(data: object, source: str) -> dict[str, Profile]:
     if not isinstance(data, dict):
-        raise ExportError(f"La sección `[profiles]` de {source} debe contener tablas.")
+        raise ExportError(f"The `[profiles]` section in {source} must contain tables.")
     profiles: dict[str, Profile] = {}
     for name, raw in data.items():
         if not isinstance(raw, dict):
-            raise ExportError(f"El perfil `{name}` de {source} debe ser una tabla.")
+            raise ExportError(f"Profile `{name}` in {source} must be a table.")
         title = raw.get("title", name)
         if not isinstance(title, str):
-            raise ExportError(f"`profiles.{name}.title` de {source} debe ser una cadena.")
+            raise ExportError(f"`profiles.{name}.title` in {source} must be a string.")
         profiles[name] = Profile(
             name=name,
             title=title,
@@ -205,50 +206,55 @@ def _personal_profiles_path(config_path: Path) -> Path:
     return config_path.with_name(f"{config_path.stem}.local.toml")
 
 
-def load_config(config_path: Path, root_override: Path | None = None) -> ProjectConfig:
-    config_path = config_path.resolve()
+def load_config(config_path: Path | None = None, root_override: Path | None = None) -> ProjectConfig:
     try:
-        data = tomllib.loads(config_path.read_text(encoding="utf-8-sig"))
+        if config_path is None:
+            root = (root_override or Path.cwd()).resolve()
+            effective_path = root / ".markdown-export.toml"
+            source = "the built-in configuration"
+            data = tomllib.loads(files("markdown_export").joinpath("default.toml").read_text(encoding="utf-8"))
+        else:
+            effective_path = config_path.resolve()
+            source = str(effective_path)
+            data = tomllib.loads(effective_path.read_text(encoding="utf-8-sig"))
+            root = Path()
     except FileNotFoundError as exc:
-        raise ExportError(f"No existe la configuración: {config_path}") from exc
+        raise ExportError(f"Configuration does not exist: {config_path}") from exc
     except tomllib.TOMLDecodeError as exc:
-        raise ExportError(f"TOML inválido en {config_path}: {exc}") from exc
+        raise ExportError(f"Invalid TOML in {source}: {exc}") from exc
 
     export_data = data.get("export", {})
     if not isinstance(export_data, dict):
-        raise ExportError("La sección `[export]` debe ser una tabla.")
+        raise ExportError("The `[export]` section must be a table.")
 
-    configured_root = export_data.get("root", "../..")
+    configured_root = export_data.get("root", ".")
     if not isinstance(configured_root, str):
-        raise ExportError("`export.root` debe ser una ruta.")
-    root = (
-        root_override.resolve()
-        if root_override is not None
-        else (config_path.parent / configured_root).resolve()
-    )
+        raise ExportError("`export.root` must be a path.")
+    if config_path is not None:
+        root = root_override.resolve() if root_override is not None else (effective_path.parent / configured_root).resolve()
     if not root.is_dir():
-        raise ExportError(f"La raíz de fuentes no existe o no es una carpeta: {root}")
+        raise ExportError(f"The source root does not exist or is not a directory: {root}")
 
     output_value = export_data.get("output_dir", "exports")
     if not isinstance(output_value, str):
-        raise ExportError("`export.output_dir` debe ser una ruta.")
+        raise ExportError("`export.output_dir` must be a path.")
     output_dir = (root / output_value).resolve()
-    _ensure_within(output_dir, root, "El directorio de salida queda fuera de la raíz.")
+    _ensure_within(output_dir, root, "The output directory is outside the root.")
 
     excludes = tuple(dict.fromkeys(ALWAYS_EXCLUDED + _as_tuple(export_data.get("exclude"), "export.exclude")))
     source_languages = _source_languages(export_data.get("source_languages"))
     default_profile = export_data.get("default_profile", "")
     if not isinstance(default_profile, str):
-        raise ExportError("`export.default_profile` debe ser una cadena.")
+        raise ExportError("`export.default_profile` must be a string.")
 
-    profiles = _profile_table(data.get("profiles", {}), str(config_path))
+    profiles = _profile_table(data.get("profiles", {}), source)
     personal_profile_names: set[str] = set()
-    personal_path = _personal_profiles_path(config_path)
+    personal_path = _personal_profiles_path(effective_path)
     if personal_path.exists():
         try:
             personal_data = tomllib.loads(personal_path.read_text(encoding="utf-8-sig"))
         except tomllib.TOMLDecodeError as exc:
-            raise ExportError(f"TOML inválido en {personal_path}: {exc}") from exc
+            raise ExportError(f"Invalid TOML in {personal_path}: {exc}") from exc
         personal_profiles = _profile_table(
             personal_data.get("profiles", {}),
             str(personal_path),
@@ -256,9 +262,9 @@ def load_config(config_path: Path, root_override: Path | None = None) -> Project
         profiles.update(personal_profiles)
         personal_profile_names.update(personal_profiles)
     if default_profile and default_profile not in profiles:
-        raise ExportError(f"El perfil predeterminado `{default_profile}` no existe.")
+        raise ExportError(f"Default profile `{default_profile}` does not exist.")
     return ProjectConfig(
-        config_path,
+        effective_path,
         root,
         output_dir,
         excludes,
@@ -280,7 +286,7 @@ def _toml_string_list(values: Iterable[str]) -> str:
 def save_personal_profile(config: ProjectConfig, profile: Profile) -> Path:
     if profile.name in config.profiles and profile.name not in config.personal_profile_names:
         raise ExportError(
-            f"`{profile.name}` es un perfil compartido; elige otro nombre para el perfil personal."
+            f"`{profile.name}` is a shared profile; choose another name for the personal profile."
         )
     profiles = {
         name: config.profiles[name]
@@ -289,7 +295,7 @@ def save_personal_profile(config: ProjectConfig, profile: Profile) -> Path:
     }
     profiles[profile.name] = profile
     lines = [
-        "# Perfiles personales del exportador. Este archivo no se versiona.",
+        "# Personal exporter profiles. This file should not be committed.",
         "",
     ]
     for name in sorted(profiles):
@@ -336,7 +342,7 @@ def options_from_profile(
         try:
             profile = config.profiles[profile_name]
         except KeyError as exc:
-            raise ExportError(f"No existe el perfil `{profile_name}`.") from exc
+            raise ExportError(f"Profile `{profile_name}` does not exist.") from exc
     else:
         profile = Profile("", title or name or "Export Markdown", tuple(includes or ()))
     selected = tuple(includes) if includes is not None else profile.include
@@ -364,7 +370,7 @@ def options_from_profile(
 def _safe_name(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip(".-")
     if not cleaned:
-        raise ExportError("El nombre del export no contiene caracteres utilizables.")
+        raise ExportError("The export name does not contain any usable characters.")
     return cleaned
 
 
@@ -470,7 +476,7 @@ class VaultIndex:
             candidates,
             key=lambda item: item.relative_to(self.root).as_posix().casefold(),
         ):
-            _ensure_within(path, self.root, f"Una fuente indexada queda fuera de la raíz: {path}")
+            _ensure_within(path, self.root, f"An indexed source is outside the root: {path}")
             relative = path.relative_to(self.root).as_posix()
             if _is_excluded(relative, excludes):
                 continue
@@ -553,13 +559,13 @@ class VaultIndex:
             return candidates[0], None
         if len(candidates) > 1:
             names = ", ".join(_relative(path, self.root) for path in candidates)
-            return None, f"Destino ambiguo `{target}`: {names}"
-        return None, f"No existe el documento `{target}`"
+            return None, f"Ambiguous target `{target}`: {names}"
+        return None, f"Document `{target}` does not exist"
 
 
 def select_paths(options: ExportOptions, index: VaultIndex) -> list[Path]:
     if index.root != options.root.resolve():
-        raise ExportError("El índice no pertenece a la raíz de la exportación.")
+        raise ExportError("The index does not belong to the export root.")
     selected: list[Path] = []
     seen: set[Path] = set()
     for entry in options.includes:
@@ -575,14 +581,14 @@ def select_paths(options: ExportOptions, index: VaultIndex) -> list[Path]:
                 seen.add(path)
                 selected.append(path)
     if not selected:
-        raise ExportError("La selección no contiene fuentes exportables.")
+        raise ExportError("The selection contains no exportable sources.")
     return selected
 
 
 def _reject_unsafe_selection(entry: str) -> None:
     path = Path(entry)
     if path.is_absolute() or any(part == ".." for part in path.parts):
-        raise ExportError(f"Selección insegura o fuera de la raíz: {entry}")
+        raise ExportError(f"Unsafe selection or path outside the root: {entry}")
 
 
 def strip_frontmatter(text: str) -> str:
@@ -631,7 +637,7 @@ def _slug(value: str) -> str:
 
 def _document_anchor(relative: str) -> str:
     digest = hashlib.sha256(relative.encode("utf-8")).hexdigest()[:10]
-    return f"mud-doc-{_slug(relative)}-{digest}"
+    return f"markdown-export-doc-{_slug(relative)}-{digest}"
 
 
 def _load_document(
@@ -686,7 +692,7 @@ def _split_wikilink(value: str) -> tuple[str, str | None, str]:
 
 
 def _inline_code_segments(line: str) -> Iterator[tuple[str, bool]]:
-    """Separa una línea sin interpretar referencias dentro de spans de código."""
+    """Split a line without interpreting references inside inline code spans."""
     cursor = 0
     plain_start = 0
     while cursor < len(line):
@@ -771,7 +777,7 @@ def _expand_dependencies(
             text = strip_frontmatter(text)
         for target, _heading, _label, embedded in _iter_local_references(text, index):
             if embedded:
-                diagnostics.add("warning", "asset-not-supported", f"Embed o adjunto no exportado: `{target}`", _relative(source, options.root), target)
+                diagnostics.add("warning", "asset-not-supported", f"Embed or attachment not exported: `{target}`", _relative(source, options.root), target)
                 continue
             resolved, error = index.resolve(target, source)
             if error:
@@ -798,9 +804,8 @@ def _rewrite_line(
     diagnostics: _Diagnostics,
     omitted: dict[tuple[str, str], None],
 ) -> str:
-    # Los enlaces Markdown se procesan antes que los wikilinks. De lo contrario,
-    # el enlace Markdown producido al expandir un wikilink se volvería a procesar
-    # como si hubiese sido escrito en el documento fuente.
+    # Markdown links are processed before wikilinks so a link produced while
+    # expanding a wikilink is not processed again as source text.
     def markdown_replace(match: re.Match[str]) -> str:
         embedded = bool(match.group(1))
         label = match.group(2)
@@ -815,7 +820,7 @@ def _rewrite_line(
         target, separator, heading = raw_target.partition("#")
         is_document = index.supports_target(target)
         if embedded or not is_document:
-            diagnostics.add("warning", "asset-not-supported", f"Adjunto no exportado: `{target}`", source.relative, target)
+            diagnostics.add("warning", "asset-not-supported", f"Attachment not exported: `{target}`", source.relative, target)
             return label or Path(target).name
         resolved, error = index.resolve(target, source.path)
         if error:
@@ -831,7 +836,7 @@ def _rewrite_line(
         embedded = bool(match.group(1))
         target, heading, label = _split_wikilink(match.group(2))
         if embedded:
-            diagnostics.add("warning", "asset-not-supported", f"Embed o adjunto no exportado: `{target}`", source.relative, target)
+            diagnostics.add("warning", "asset-not-supported", f"Embed or attachment not exported: `{target}`", source.relative, target)
             return label
         resolved, error = index.resolve(target, source.path)
         if error:
@@ -866,7 +871,7 @@ def _render_document(
     )
     output = [f'<a id="{document.document_anchor}"></a>', f"## {rendered_title}", ""]
     if options.source_markers:
-        output.extend([f"> Fuente: `{document.relative}`", ""])
+        output.extend([f"> Source: `{document.relative}`", ""])
 
     if document.language is not None:
         longest_run = max(
@@ -952,12 +957,12 @@ def _appendices(
 ) -> str:
     parts: list[str] = []
     if omitted:
-        parts.extend(["## Referencias no incluidas", ""])
+        parts.extend(["## References not included", ""])
         for label, target in omitted:
             parts.append(f"- {label}: `{target}`")
         parts.append("")
     if diagnostics.items:
-        parts.extend(["## Diagnósticos del export", ""])
+        parts.extend(["## Export diagnostics", ""])
         for item in diagnostics.items:
             location = f" ({item.source})" if item.source else ""
             parts.append(f"- **{item.level} · {item.code}**{location}: {item.message}")
@@ -977,7 +982,7 @@ def _group_sections(
     current_size = 0
     for relative, content in sections:
         if len(content) > max_chars:
-            diagnostics.add("warning", "oversized-document", f"`{relative}` supera por sí solo max_chars={max_chars}.", relative)
+            diagnostics.add("warning", "oversized-document", f"`{relative}` exceeds max_chars={max_chars} on its own.", relative)
         if current and current_size + len(content) > max_chars:
             groups.append(current)
             current = []
@@ -994,14 +999,14 @@ def build_export(
     index: VaultIndex | None = None,
 ) -> ExportResult:
     options = replace(options, root=options.root.resolve(), output_dir=options.output_dir.resolve())
-    _ensure_within(options.output_dir, options.root, "El directorio de salida queda fuera de la raíz.")
+    _ensure_within(options.output_dir, options.root, "The output directory is outside the root.")
     if options.max_chars < 0:
-        raise ExportError("`max_chars` no puede ser negativo.")
+        raise ExportError("`max_chars` cannot be negative.")
 
-    # Las exclusiones de un perfil impiden seleccionar o seguir un documento,
-    # pero no deben volverlo «inexistente»: aún puede aparecer como referencia
-    # omitida. Solo los directorios internos que nunca son contenido se apartan
-    # del índice de resolución.
+    # Profile exclusions prevent selecting or following a document, but do not
+    # make it nonexistent: it can still be reported as an omitted reference.
+    # Only internal directories that are never content are excluded from the
+    # resolution index.
     if index is None:
         index = VaultIndex(
             options.root,
@@ -1012,7 +1017,7 @@ def build_export(
         index.root != options.root
         or index.source_languages != options.source_languages
     ):
-        raise ExportError("El índice no es compatible con esta exportación.")
+        raise ExportError("The index is not compatible with this export.")
     explicit = select_paths(options, index)
     diagnostics = _Diagnostics()
     ordered = _expand_dependencies(explicit, index, options, diagnostics)
@@ -1037,7 +1042,7 @@ def build_export(
 
     if options.strict_links and any(item.code in {"unresolved-link", "asset-not-supported"} for item in diagnostics.items):
         messages = "; ".join(item.message for item in diagnostics.items if item.code in {"unresolved-link", "asset-not-supported"})
-        raise ExportError(f"El modo estricto rechazó el export: {messages}")
+        raise ExportError(f"Strict mode rejected the export: {messages}")
 
     if options.zip_tree:
         parts = [
@@ -1172,7 +1177,7 @@ def write_export(options: ExportOptions, result: ExportResult) -> tuple[Path, ..
     base_output = options.output
     zipped = options.zip_tree or len(result.parts) > 1
     if base_output is not None:
-        _ensure_within(base_output, options.root, "La salida queda fuera de la raíz del proyecto.")
+        _ensure_within(base_output, options.root, "The output is outside the project root.")
         target = base_output.with_suffix(".zip") if zipped else base_output
     else:
         target = (

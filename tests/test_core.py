@@ -7,8 +7,8 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-import tooling.markdown_export.core as core
-from tooling.markdown_export.core import (
+import markdown_export.core as core
+from markdown_export.core import (
     ALWAYS_EXCLUDED,
     ExportError,
     ExportOptions,
@@ -53,95 +53,95 @@ class MarkdownTransformationTests(VaultCase):
     def test_frontmatter_bom_lf_headings_and_code_are_preserved_correctly(self) -> None:
         self.write(
             "doc.md",
-            "---\r\ntags: [x]\r\n---\r\n# Título\r\n## Sección\r\n```mud\r\n## no es título\r\n[[NoExiste]]\r\n```\r\n",
+            "---\r\ntags: [x]\r\n---\r\n# Title\r\n## Section\r\n```text\r\n## not a title\r\n[[DoesNotExist]]\r\n```\r\n",
             bom=True,
         )
         result = build_export(self.options("doc.md"))
         content = result.parts[0].content
         self.assertNotIn("tags: [x]", content)
         self.assertNotIn("\r", content)
-        self.assertIn("## Título", content)
-        self.assertIn("### Sección", content)
-        self.assertIn("## no es título", content)
-        self.assertIn("[[NoExiste]]", content)
+        self.assertIn("## Title", content)
+        self.assertIn("### Section", content)
+        self.assertIn("## not a title", content)
+        self.assertIn("[[DoesNotExist]]", content)
         self.assertFalse(result.diagnostics)
 
     def test_unclosed_frontmatter_is_not_removed(self) -> None:
-        self.assertEqual(strip_frontmatter("---\na: 1\ntexto"), "---\na: 1\ntexto")
+        self.assertEqual(strip_frontmatter("---\na: 1\ntext"), "---\na: 1\ntext")
 
     def test_wikilinks_alias_heading_and_markdown_links(self) -> None:
         self.write(
-            "a/uno.md",
-            "# Uno\n[[../b/dos#Detalle|véase dos]]\n[dos también](../b/dos.md#Detalle)\n"
-            "[externo](https://example.com)\n",
+            "a/one.md",
+            "# One\n[[../b/two#Detail|see two]]\n[two as well](../b/two.md#Detail)\n"
+            "[external](https://example.com)\n",
         )
-        self.write("b/dos.md", "# Dos\n## Detalle\nTexto\n")
-        result = build_export(self.options("a/uno.md", "b/dos.md"))
+        self.write("b/two.md", "# Two\n## Detail\nText\n")
+        result = build_export(self.options("a/one.md", "b/two.md"))
         content = result.parts[0].content
         self.assertNotIn("[[", content)
-        self.assertRegex(content, r"\[véase dos\]\(#mud-doc-.*-detalle\)")
-        self.assertRegex(content, r"\[dos también\]\(#mud-doc-.*-detalle\)")
-        self.assertIn("[externo](https://example.com)", content)
+        self.assertRegex(content, r"\[see two\]\(#markdown-export-doc-.*-detail\)")
+        self.assertRegex(content, r"\[two as well\]\(#markdown-export-doc-.*-detail\)")
+        self.assertIn("[external](https://example.com)", content)
 
     def test_inline_code_is_not_treated_as_links(self) -> None:
         self.write(
             "a.md",
-            "# A\n`[[NoExiste]]` [[b|B]] ``[falso](manual.pdf) y `código` ``\n",
+            "# A\n`[[DoesNotExist]]` [[b|B]] ``[false](manual.pdf) and `code` ``\n",
         )
         self.write("b.md", "# B\n")
         result = build_export(self.options("a.md", follow_links=True))
         content = result.parts[0].content
-        self.assertIn("`[[NoExiste]]`", content)
-        self.assertIn("``[falso](manual.pdf) y `código` ``", content)
-        self.assertRegex(content, r"\[B\]\(#mud-doc-")
+        self.assertIn("`[[DoesNotExist]]`", content)
+        self.assertIn("``[false](manual.pdf) and `code` ``", content)
+        self.assertRegex(content, r"\[B\]\(#markdown-export-doc-")
         self.assertEqual(result.dependency_documents, ("b.md",))
         self.assertFalse(result.diagnostics)
 
     def test_extensionless_and_angle_bracket_markdown_links_are_resolved(self) -> None:
-        self.write("a.md", "# A\n[sin extensión](folder/b) [con espacio](<folder/con espacio.md>)\n")
+        self.write("a.md", "# A\n[without extension](folder/b) [with space](<folder/with space.md>)\n")
         self.write("folder/b.md", "# B\n")
-        self.write("folder/con espacio.md", "# Espacio\n")
+        self.write("folder/with space.md", "# Space\n")
         result = build_export(self.options("a.md", "folder/*.md"))
-        self.assertRegex(result.parts[0].content, r"\[sin extensión\]\(#mud-doc-")
-        self.assertRegex(result.parts[0].content, r"\[con espacio\]\(#mud-doc-")
+        self.assertRegex(result.parts[0].content, r"\[without extension\]\(#markdown-export-doc-")
+        self.assertRegex(result.parts[0].content, r"\[with space\]\(#markdown-export-doc-")
 
     def test_attachments_warn_and_strict_mode_rejects_them(self) -> None:
-        self.write("a.md", "# A\n[manual](manual.pdf) ![imagen](image.png)\n")
+        self.write("a.md", "# A\n[manual](manual.pdf) ![image](image.png)\n")
         loose = build_export(self.options("a.md"))
         self.assertEqual([item.code for item in loose.diagnostics], ["asset-not-supported", "asset-not-supported"])
-        self.assertNotIn("manual.pdf", loose.parts[0].content.split("## Diagnósticos")[0])
-        with self.assertRaisesRegex(ExportError, "modo estricto"):
+        self.assertNotIn("manual.pdf", loose.parts[0].content.split("## Export diagnostics")[0])
+        with self.assertRaisesRegex(ExportError, "Strict mode"):
             build_export(self.options("a.md", strict_links=True))
 
     def test_links_in_headings_are_also_rewritten(self) -> None:
-        self.write("a.md", "# A\n## Véase [[b|B]]\n")
+        self.write("a.md", "# A\n## See [[b|B]]\n")
         self.write("b.md", "# B\n")
         result = build_export(self.options("a.md", "b.md"))
         outside_fences = [
             line for line, fenced in core._fenced_lines(result.parts[0].content) if not fenced
         ]
         self.assertNotIn("[[", "\n".join(outside_fences))
-        self.assertRegex(result.parts[0].content, r"### Véase \[B\]\(#mud-doc-")
+        self.assertRegex(result.parts[0].content, r"### See \[B\]\(#markdown-export-doc-")
 
     def test_omitted_reference_is_plain_text_and_appears_in_appendix(self) -> None:
         self.write("a.md", "# A\n[[b|B visible]]\n")
         self.write("b.md", "# B\n")
         result = build_export(self.options("a.md"))
         self.assertIn("B visible", result.parts[0].content)
-        self.assertIn("## Referencias no incluidas", result.parts[0].content)
+        self.assertIn("## References not included", result.parts[0].content)
         self.assertEqual(result.omitted_references, (("B visible", "b.md"),))
 
     def test_ambiguous_and_missing_links_warn_or_fail_in_strict_mode(self) -> None:
-        self.write("a.md", "# A\n[[Duplicado]] [[Ausente]]\n")
-        self.write("x/Duplicado.md", "# X\n")
-        self.write("y/Duplicado.md", "# Y\n")
+        self.write("a.md", "# A\n[[Duplicate]] [[Missing]]\n")
+        self.write("x/Duplicate.md", "# X\n")
+        self.write("y/Duplicate.md", "# Y\n")
         loose = build_export(self.options("a.md"))
         self.assertEqual([item.code for item in loose.diagnostics], ["unresolved-link", "unresolved-link"])
         outside_fences = [
             line for line, fenced in core._fenced_lines(loose.parts[0].content) if not fenced
         ]
         self.assertNotIn("[[", "\n".join(outside_fences))
-        with self.assertRaisesRegex(ExportError, "modo estricto"):
+        with self.assertRaisesRegex(ExportError, "Strict mode"):
             build_export(self.options("a.md", strict_links=True))
 
 
@@ -153,7 +153,7 @@ class SelectionAndDependencyTests(VaultCase):
         with mock.patch.object(
             Path,
             "rglob",
-            side_effect=AssertionError("select_paths no debe recorrer el disco"),
+            side_effect=AssertionError("select_paths must not scan the disk"),
         ):
             directory = select_paths(self.options("docs"), index)
             globbed = select_paths(self.options("**/*.md"), index)
@@ -169,8 +169,8 @@ class SelectionAndDependencyTests(VaultCase):
         options = self.options("a.md")
         index = VaultIndex(self.root, ALWAYS_EXCLUDED)
         with mock.patch(
-            "tooling.markdown_export.core.VaultIndex",
-            side_effect=AssertionError("build_export no debe reconstruir el índice"),
+            "markdown_export.core.VaultIndex",
+            side_effect=AssertionError("build_export must not rebuild the index"),
         ):
             result = build_export(options, index)
         self.assertEqual(result.explicit_documents, ("a.md",))
@@ -199,8 +199,8 @@ class SelectionAndDependencyTests(VaultCase):
         self.assertEqual(result.explicit_documents, ("ok.md",))
 
     def test_profile_excluded_document_can_be_reported_as_omitted(self) -> None:
-        self.write("active.md", "# Activo\n[[archive/old]]\n")
-        self.write("archive/old.md", "# Antiguo\n")
+        self.write("active.md", "# Active\n[[archive/old]]\n")
+        self.write("archive/old.md", "# Old\n")
         options = self.options("**/*.md", excludes=ALWAYS_EXCLUDED + ("archive/**",))
         result = build_export(options)
         self.assertEqual(result.explicit_documents, ("active.md",))
@@ -209,9 +209,9 @@ class SelectionAndDependencyTests(VaultCase):
 
     def test_traversal_and_absolute_selection_are_rejected(self) -> None:
         self.write("a.md", "# A\n")
-        with self.assertRaisesRegex(ExportError, "insegura"):
+        with self.assertRaisesRegex(ExportError, "Unsafe selection"):
             build_export(self.options("../fuera.md"))
-        with self.assertRaisesRegex(ExportError, "insegura"):
+        with self.assertRaisesRegex(ExportError, "Unsafe selection"):
             build_export(self.options(str((self.root / "a.md").resolve())))
 
 
@@ -286,14 +286,14 @@ class OutputTests(VaultCase):
         outside = self.root.parent / "forbidden-export.md"
         options = self.options("a.md", output=outside)
         result = build_export(options)
-        with self.assertRaisesRegex(ExportError, "fuera"):
+        with self.assertRaisesRegex(ExportError, "outside"):
             write_export(options, result)
         self.assertFalse(outside.exists())
 
     def test_atomic_write_cleans_temporary_file_after_replace_error(self) -> None:
         target = self.output / "failed.md"
-        with mock.patch("tooling.markdown_export.core.os.replace", side_effect=OSError("fallo simulado")):
-            with self.assertRaisesRegex(OSError, "fallo simulado"):
+        with mock.patch("markdown_export.core.os.replace", side_effect=OSError("simulated failure")):
+            with self.assertRaisesRegex(OSError, "simulated failure"):
                 core._atomic_write(target, "contenido")
         self.assertFalse(target.exists())
         self.assertEqual(list(self.output.glob("*.tmp")), [])
@@ -334,8 +334,8 @@ class OutputTests(VaultCase):
         self.write("b.md", "# B\n" + "b" * 80)
         options = self.options("a.md", "b.md", max_chars=100)
         result = build_export(options)
-        with mock.patch("tooling.markdown_export.core.os.replace", side_effect=OSError("fallo zip")):
-            with self.assertRaisesRegex(OSError, "fallo zip"):
+        with mock.patch("markdown_export.core.os.replace", side_effect=OSError("ZIP failure")):
+            with self.assertRaisesRegex(OSError, "ZIP failure"):
                 write_export(options, result)
         self.assertFalse((self.output / "test.zip").exists())
         self.assertEqual(list(self.output.glob("*.tmp")), [])

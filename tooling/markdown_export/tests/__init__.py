@@ -1,1 +1,0 @@
-"""Pruebas del exportador Markdown."""
