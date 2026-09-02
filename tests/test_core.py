@@ -158,8 +158,8 @@ class SelectionAndDependencyTests(VaultCase):
             directory = select_paths(self.options("docs"), index)
             globbed = select_paths(self.options("**/*.md"), index)
         expected = [
-            self.root / "docs" / "nested" / "child.md",
-            self.root / "docs" / "root.md",
+            (self.root / "docs" / "nested" / "child.md").resolve(),
+            (self.root / "docs" / "root.md").resolve(),
         ]
         self.assertEqual(directory, expected)
         self.assertEqual(globbed, expected)

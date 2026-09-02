@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 import subprocess
 import sys
@@ -13,7 +14,7 @@ from pathlib import Path
 
 class ServeCliTests(unittest.TestCase):
     def test_ready_json_and_health_over_dynamic_port(self) -> None:
-        repository = Path(__file__).resolve().parents[3]
+        repository = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as root:
             process = subprocess.Popen(
                 [
@@ -50,7 +51,7 @@ class ServeCliTests(unittest.TestCase):
                 ready = json.loads(line)
                 self.assertEqual(ready["event"], "ready")
                 self.assertEqual(ready["protocol_version"], 1)
-                self.assertEqual(Path(ready["root"]), Path(root))
+                self.assertTrue(os.path.samefile(ready["root"], root))
                 with urllib.request.urlopen(
                     ready["url"] + "api/health",
                     timeout=3,
@@ -58,7 +59,7 @@ class ServeCliTests(unittest.TestCase):
                     health = json.loads(response.read())
                 self.assertEqual(health["status"], "ok")
                 self.assertEqual(health["protocol_version"], 1)
-                self.assertEqual(Path(health["root"]), Path(root))
+                self.assertTrue(os.path.samefile(health["root"], root))
             finally:
                 process.terminate()
                 try:
