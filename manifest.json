@@ -1,7 +1,7 @@
 {
   "id": "r3-markdown-export",
   "name": "R3 Markdown Export",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "minAppVersion": "1.7.2",
   "description": "Build portable Markdown exports from profiles or selected vault files.",
   "author": "R3Neer",

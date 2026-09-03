@@ -11,11 +11,11 @@ telemetry and no network service. The web interface binds exclusively to
 
 ## Install
 
-Python 3.11 or later is required. The 0.1.0 release is distributed through
+Python 3.11 or later is required. The 0.1.1 release is distributed through
 GitHub rather than PyPI:
 
 ```console
-pipx install https://github.com/R3Neer/markdown-export/releases/download/v0.1.0/r3_markdown_export-0.1.0-py3-none-any.whl
+pipx install https://github.com/R3Neer/markdown-export/releases/download/v0.1.1/r3_markdown_export-0.1.1-py3-none-any.whl
 ```
 
 Confirm the installation:

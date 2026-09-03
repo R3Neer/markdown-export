@@ -71,6 +71,7 @@ def help_catalogue() -> HelpCatalogue:
             CommandHelp("export", "EXPORT", "Create a portable Markdown export", "Export selected sources as one document, several parts or a path-preserving ZIP.", (f"{invocation} export [--profile NAME | --files PATH ...] [options]",), items=common + (
                 HelpItem("--profile NAME", "Use a configured selection profile."),
                 HelpItem("--files PATH ...", "Select relative files, folders or patterns."),
+                HelpItem("--name NAME", "Set the base name for generated export files."),
                 HelpItem("--output PATH", "Choose the output path within the root."),
                 HelpItem("--follow-links", "Discover linked documents."),
                 HelpItem("--no-follow-links", "Do not discover linked documents."),
@@ -91,6 +92,11 @@ def help_catalogue() -> HelpCatalogue:
             ), notes=("The server is local-only and must not be exposed as a network service.",)),
         ),
         usage=(f"{invocation} <command> [arguments] [options]", f"{invocation} <command> --help", f"{invocation} --version"),
+        global_items=(
+            HelpItem("--version", "Print the installed version and exit."),
+            HelpItem("--colour auto|always|never", "Control colour for human output. Default: auto; NO_COLOR disables it."),
+            HelpItem("--ascii", "Use ASCII status symbols when Unicode is unsuitable."),
+        ),
         notes=(f"Run {invocation} <command> --help for detailed help.",),
         show_help_on_empty=True,
     )

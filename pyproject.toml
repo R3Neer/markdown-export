@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "r3-markdown-export"
-version = "0.1.0"
+version = "0.1.1"
 description = "Create portable Markdown exports from Obsidian vaults and document trees"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "R3Neer" }]
 dependencies = [
-  "r3-cli @ https://github.com/R3Neer/R3CLI/archive/1d6e4b3fb245635ec39d1251490cb0f019ccd2fb.zip",
+  "r3-cli @ https://github.com/R3Neer/R3CLI/archive/v0.4.0.zip",
 ]
 classifiers = [
   "License :: OSI Approved :: MIT License",

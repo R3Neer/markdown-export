@@ -7,7 +7,7 @@ from markdown_export.cli import main
 
 def test_version(capsys) -> None:
     assert main(["--version"]) == 0
-    assert capsys.readouterr().out == "0.1.0\n"
+    assert capsys.readouterr().out == "0.1.1\n"
 
 
 def test_command_help_does_not_read_configuration(tmp_path: Path, capsys) -> None:
@@ -25,7 +25,16 @@ def test_plain_ascii_command_help(capsys) -> None:
 
     captured = capsys.readouterr()
     assert "EXPORT" in captured.out
+    assert "--name NAME" in captured.out
     assert "\x1b[" not in captured.out
+
+
+def test_global_help_documents_presentation_options(capsys) -> None:
+    assert main(["--help"]) == 0
+    captured = capsys.readouterr()
+    assert "GLOBAL OPTIONS" in captured.out
+    assert "--version" in captured.out
+    assert "--colour auto|always|never" in captured.out
 
 
 def test_default_export_uses_builtin_profile(tmp_path: Path, capsys) -> None:

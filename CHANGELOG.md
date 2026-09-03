@@ -2,6 +2,11 @@
 
 All notable changes to R3 Markdown Export are documented here.
 
+## 0.1.1 — 2026-09-03
+
+- Adopt R3CLI 0.4.0 help coverage validation.
+- Document global presentation options and every export input, including `--name`.
+
 ## 0.1.0 — 2026-09-03
 
 - Extract the portable Markdown exporter from Mud as an independent package.
