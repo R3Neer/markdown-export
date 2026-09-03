@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "R3Neer" }]
 dependencies = [
-  "r3-cli @ https://github.com/R3Neer/R3CLI/archive/v0.4.0.zip",
+  "r3-cli @ https://github.com/R3Neer/R3CLI/archive/v0.4.1.zip",
 ]
 classifiers = [
   "License :: OSI Approved :: MIT License",
